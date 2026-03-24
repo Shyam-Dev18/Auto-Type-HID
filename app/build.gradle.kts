@@ -44,6 +44,10 @@ android {
     }
 }
 
+configurations.configureEach {
+    resolutionStrategy.force("com.squareup:javapoet:1.13.0")
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
@@ -55,11 +59,14 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
     
     implementation(libs.kotlinx.coroutines.android)
+    implementation("com.squareup:javapoet:1.13.0")
 
     implementation(libs.hilt.android)
     

@@ -13,11 +13,13 @@ composeMaterial3 = "1.1.2"
 lifecycleViewmodelCompose = "2.6.2"
 lifecycleViewmodelKtx = "2.6.2"
 coroutinesAndroid = "1.7.3"
-hiltAndroid = "2.42"
+hiltAndroid = "2.48"
 hiltNavigationCompose = "1.1.0"
 roomRuntime = "2.6.1"
 roomKtx = "2.6.1"
 dataStore = "1.1.1"
+navigationCompose = "2.8.8"
+lifecycleRuntimeCompose = "2.8.7"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -42,6 +44,8 @@ androidx-room-runtime = { group = "androidx.room", name = "room-runtime", versio
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "roomRuntime" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "roomKtx" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "dataStore" }
+androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
+androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycleRuntimeCompose" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

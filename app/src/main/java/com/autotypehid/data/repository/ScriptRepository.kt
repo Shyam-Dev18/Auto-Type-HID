@@ -23,7 +23,25 @@ class ScriptRepository(
         return scriptDao.getAll()
     }
 
+    suspend fun getScriptById(id: Int): ScriptEntity? {
+        return scriptDao.getById(id)
+    }
+
+    suspend fun upsertScript(id: Int?, name: String, content: String) {
+        if (name.isBlank() || content.isBlank()) return
+        val cleanName = name.trim()
+        if (id == null || id <= 0) {
+            addScript(cleanName, content)
+            return
+        }
+        scriptDao.update(id, cleanName, content)
+    }
+
     suspend fun deleteScript(script: ScriptEntity) {
         scriptDao.delete(script)
+    }
+
+    suspend fun deleteScriptById(id: Int) {
+        scriptDao.deleteById(id)
     }
 }
