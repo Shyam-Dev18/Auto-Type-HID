@@ -8,7 +8,10 @@ import android.bluetooth.BluetoothHidDevice
 import android.bluetooth.BluetoothHidDeviceAppQosSettings
 import android.bluetooth.BluetoothHidDeviceAppSdpSettings
 import android.bluetooth.BluetoothProfile
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
@@ -40,6 +43,36 @@ class BluetoothSessionRepository(
     private var appRegistered = false
     private var pendingHostAddress: String? = null
     private var connectedHost: BluetoothDevice? = null
+    private var scanReceiverRegistered = false
+    private val discoveredDevices = linkedMapOf<String, ScannedDevice>()
+
+    private val scanReceiver = object : BroadcastReceiver() {
+        @SuppressLint("MissingPermission")
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                BluetoothDevice.ACTION_FOUND -> {
+                    val device = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                    } ?: return
+
+                    val address = device.address ?: return
+                    val name = device.name ?: "Unknown Device"
+                    discoveredDevices[address] = ScannedDevice(name = name, address = address)
+                    _devices.value = discoveredDevices.values.toList().sortedBy { it.name.lowercase() }
+                }
+
+                BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
+                    _isScanning.value = false
+                    if (_connectionState.value == ConnectionState.SCANNING) {
+                        _connectionState.value = if (connectedHost != null) ConnectionState.CONNECTED else ConnectionState.DISCONNECTED
+                    }
+                }
+            }
+        }
+    }
 
     private val profileListener = object : BluetoothProfile.ServiceListener {
         override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
@@ -100,23 +133,41 @@ class BluetoothSessionRepository(
             return
         }
 
+        val btAdapter = adapter
+        if (btAdapter == null || !btAdapter.isEnabled) {
+            _connectionState.value = ConnectionState.ERROR
+            return
+        }
+
+        registerScanReceiverIfNeeded()
+
+        if (btAdapter.isDiscovering) {
+            btAdapter.cancelDiscovery()
+        }
+
         _isScanning.value = true
         _connectionState.value = ConnectionState.SCANNING
 
-        val bonded = adapter?.bondedDevices
-            ?.map { ScannedDevice(name = it.name ?: "Unknown Device", address = it.address) }
-            ?.sortedBy { it.name.lowercase() }
-            .orEmpty()
+        discoveredDevices.clear()
+        btAdapter.bondedDevices
+            ?.forEach { bonded ->
+                discoveredDevices[bonded.address] = ScannedDevice(
+                    name = bonded.name ?: "Unknown Device",
+                    address = bonded.address
+                )
+            }
+        _devices.value = discoveredDevices.values.toList().sortedBy { it.name.lowercase() }
 
-        _devices.value = bonded
-        _isScanning.value = false
-
-        if (_connectionState.value == ConnectionState.SCANNING) {
-            _connectionState.value = if (connectedHost != null) ConnectionState.CONNECTED else ConnectionState.DISCONNECTED
+        val discoveryStarted = btAdapter.startDiscovery()
+        if (!discoveryStarted) {
+            _isScanning.value = false
+            _connectionState.value = ConnectionState.ERROR
         }
     }
 
+    @SuppressLint("MissingPermission")
     fun stopScan() {
+        adapter?.takeIf { it.isDiscovering }?.cancelDiscovery()
         _isScanning.value = false
         if (_connectionState.value == ConnectionState.SCANNING) {
             _connectionState.value = if (connectedHost != null) ConnectionState.CONNECTED else ConnectionState.DISCONNECTED
@@ -190,7 +241,8 @@ class BluetoothSessionRepository(
     private fun canScan(): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             return hasConnectPermission() &&
-                ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
+                ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         }
 
         return ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
@@ -206,7 +258,20 @@ class BluetoothSessionRepository(
 
     @SuppressLint("MissingPermission")
     private fun findBondedDevice(address: String): BluetoothDevice? {
-        return adapter?.bondedDevices?.firstOrNull { it.address == address }
+        val bonded = adapter?.bondedDevices?.firstOrNull { it.address == address }
+        if (bonded != null) return bonded
+
+        return runCatching { adapter?.getRemoteDevice(address) }.getOrNull()
+    }
+
+    private fun registerScanReceiverIfNeeded() {
+        if (scanReceiverRegistered) return
+        val filter = IntentFilter().apply {
+            addAction(BluetoothDevice.ACTION_FOUND)
+            addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
+        }
+        context.registerReceiver(scanReceiver, filter)
+        scanReceiverRegistered = true
     }
 
     private fun ensureProfileProxy() {

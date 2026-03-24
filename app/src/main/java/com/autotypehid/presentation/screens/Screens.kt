@@ -31,7 +31,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.autotypehid.domain.model.ConnectionState
 import com.autotypehid.domain.model.Script
 import com.autotypehid.domain.model.TypingState
@@ -83,23 +85,24 @@ fun PermissionsScreen(
     state: PermissionsUiState,
     onEvent: (PermissionsUiEvent) -> Unit
 ) {
+    val context = LocalContext.current
+
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { result ->
-        val bluetoothGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            result[Manifest.permission.BLUETOOTH_CONNECT] == true &&
-                result[Manifest.permission.BLUETOOTH_SCAN] == true
-        } else {
-            result[Manifest.permission.ACCESS_FINE_LOCATION] == true
-        }
-
-        val notificationsGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            result[Manifest.permission.POST_NOTIFICATIONS] == true
-        } else {
-            true
-        }
+    ) {
+        val bluetoothGranted = isBluetoothPermissionGranted(context)
+        val notificationsGranted = isNotificationPermissionGranted(context)
 
         onEvent(PermissionsUiEvent.OnPermissionResult(bluetoothGranted, notificationsGranted))
+    }
+
+    LaunchedEffect(Unit) {
+        onEvent(
+            PermissionsUiEvent.OnPermissionResult(
+                bluetoothGranted = isBluetoothPermissionGranted(context),
+                notificationsGranted = isNotificationPermissionGranted(context)
+            )
+        )
     }
 
     Scaffold(topBar = { TopAppBar(title = { Text("Permissions") }) }) { padding ->
@@ -113,17 +116,17 @@ fun PermissionsScreen(
             Text("Grant required permissions before scanning devices.")
 
             Button(onClick = {
-                val permissions = mutableListOf<String>()
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
-                    permissions.add(Manifest.permission.BLUETOOTH_SCAN)
+                val missingPermissions = buildMissingPermissions(context)
+                if (missingPermissions.isEmpty()) {
+                    onEvent(
+                        PermissionsUiEvent.OnPermissionResult(
+                            bluetoothGranted = true,
+                            notificationsGranted = true
+                        )
+                    )
                 } else {
-                    permissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
+                    launcher.launch(missingPermissions.toTypedArray())
                 }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    permissions.add(Manifest.permission.POST_NOTIFICATIONS)
-                }
-                launcher.launch(permissions.toTypedArray())
             }) {
                 Text("Request Permissions")
             }
@@ -137,6 +140,43 @@ fun PermissionsScreen(
                 Text("Continue")
             }
         }
+    }
+}
+
+private fun buildMissingPermissions(context: android.content.Context): List<String> {
+    val required = mutableListOf<String>()
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        required.add(Manifest.permission.BLUETOOTH_CONNECT)
+        required.add(Manifest.permission.BLUETOOTH_SCAN)
+    }
+
+    required.add(Manifest.permission.ACCESS_FINE_LOCATION)
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        required.add(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    return required.filter { permission ->
+        ContextCompat.checkSelfPermission(context, permission) != android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+}
+
+private fun isBluetoothPermissionGranted(context: android.content.Context): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == android.content.pm.PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == android.content.pm.PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    } else {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+}
+
+private fun isNotificationPermissionGranted(context: android.content.Context): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    } else {
+        true
     }
 }
 
