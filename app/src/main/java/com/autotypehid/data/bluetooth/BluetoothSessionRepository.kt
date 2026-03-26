@@ -55,8 +55,9 @@ class BluetoothSessionRepository(
     private val _lastConnectedAddress = MutableStateFlow(knownDevicesStore.readLastConnectedAddress())
     val lastConnectedAddress: StateFlow<String?> = _lastConnectedAddress.asStateFlow()
 
-    private var hidDevice: BluetoothHidDevice? = null
+    private var hidDeviceProxy: BluetoothHidDevice? = null
     private var appRegistered = false
+    private var profileProxyRequested = false
     private var pendingHostAddress: String? = null
     private var connectedHost: BluetoothDevice? = null
     private var scanReceiverRegistered = false
@@ -114,19 +115,19 @@ class BluetoothSessionRepository(
     private val profileListener = object : BluetoothProfile.ServiceListener {
         override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
             if (profile != BluetoothProfile.HID_DEVICE) return
-            hidDevice = proxy as BluetoothHidDevice
+            hidDeviceProxy = proxy as BluetoothHidDevice
+            profileProxyRequested = false
             registerAppIfNeeded()
+            syncConnectedHostFromProfile()
             connectPendingHostIfReady()
         }
 
         override fun onServiceDisconnected(profile: Int) {
             if (profile != BluetoothProfile.HID_DEVICE) return
-            hidDevice = null
+            hidDeviceProxy = null
             appRegistered = false
-            connectedHost = null
-            if (_connectionState.value != ConnectionState.ERROR) {
-                _connectionState.value = ConnectionState.DISCONNECTED
-            }
+            profileProxyRequested = false
+            clearConnectedState(keepError = true)
         }
     }
 
@@ -134,37 +135,32 @@ class BluetoothSessionRepository(
         override fun onAppStatusChanged(pluggedDevice: BluetoothDevice?, registered: Boolean) {
             appRegistered = registered
             if (!registered) {
-                _connectionState.value = ConnectionState.ERROR
+                if (_connectionState.value == ConnectionState.CONNECTING) {
+                    _connectionState.value = ConnectionState.ERROR
+                }
                 return
             }
+            syncConnectedHostFromProfile()
             connectPendingHostIfReady()
         }
 
         override fun onConnectionStateChanged(device: BluetoothDevice, state: Int) {
             when (state) {
-                BluetoothProfile.STATE_CONNECTED -> {
-                    connectedHost = device
-                    val connected = ScannedDevice(
-                        name = device.name ?: "Unknown Device",
-                        address = device.address
-                    )
-                    _connectedDevice.value = connected
-                    knownDevicesStore.saveConnection(connected)
-                    _savedDevices.value = knownDevicesStore.readKnownDevices()
-                    _lastConnectedAddress.value = knownDevicesStore.readLastConnectedAddress()
-                    _connectionState.value = ConnectionState.CONNECTED
-                }
+                BluetoothProfile.STATE_CONNECTED -> applyConnectedHost(device)
 
                 BluetoothProfile.STATE_CONNECTING -> {
                     _connectionState.value = ConnectionState.CONNECTING
                 }
 
                 BluetoothProfile.STATE_DISCONNECTED -> {
-                    if (connectedHost?.address == device.address) {
-                        connectedHost = null
+                    if (pendingHostAddress == device.address) {
+                        pendingHostAddress = null
                     }
-                    _connectedDevice.value = null
-                    _connectionState.value = ConnectionState.DISCONNECTED
+                    if (connectedHost?.address == device.address) {
+                        clearConnectedState(keepError = false)
+                    } else if (_connectionState.value != ConnectionState.CONNECTED) {
+                        _connectionState.value = ConnectionState.DISCONNECTED
+                    }
                 }
 
                 else -> Unit
@@ -222,12 +218,13 @@ class BluetoothSessionRepository(
 
     @SuppressLint("MissingPermission")
     fun connect(address: String) {
-        if (!isHidDeviceSupported()) {
+        if (!isHidDeviceSupported() || !hasConnectPermission() || !hasAdvertisePermission()) {
             _connectionState.value = ConnectionState.ERROR
             return
         }
 
-        if (!hasConnectPermission()) {
+        val btAdapter = adapter
+        if (btAdapter == null || !btAdapter.isEnabled) {
             _connectionState.value = ConnectionState.ERROR
             return
         }
@@ -239,6 +236,16 @@ class BluetoothSessionRepository(
         }
 
         pendingHostAddress = host.address
+        if (connectedHost?.address == host.address) {
+            _connectionState.value = ConnectionState.CONNECTED
+            return
+        }
+
+        if (btAdapter.isDiscovering) {
+            btAdapter.cancelDiscovery()
+            _isScanning.value = false
+        }
+
         _connectionState.value = ConnectionState.CONNECTING
         ensureProfileProxy()
         connectPendingHostIfReady()
@@ -248,13 +255,11 @@ class BluetoothSessionRepository(
     fun disconnect() {
         pendingHostAddress = null
         val host = connectedHost
-        val hid = hidDevice
-        if (host != null && hid != null) {
+        val hid = hidDeviceProxy
+        if (host != null && hid != null && hasConnectPermission()) {
             hid.disconnect(host)
         }
-        connectedHost = null
-        _connectedDevice.value = null
-        _connectionState.value = ConnectionState.DISCONNECTED
+        clearConnectedState(keepError = false)
     }
 
     fun reconnectLastDevice() {
@@ -308,7 +313,7 @@ class BluetoothSessionRepository(
     }
 
     fun isTypingReady(): Boolean {
-        return isConnected() && connectedHost != null && hidDevice != null
+        return isConnected() && connectedHost != null && hidDeviceProxy != null && appRegistered
     }
 
     @SuppressLint("MissingPermission")
@@ -356,6 +361,14 @@ class BluetoothSessionRepository(
         }
     }
 
+    private fun hasAdvertisePermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_ADVERTISE) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+    }
+
     @SuppressLint("MissingPermission")
     private fun findBondedDevice(address: String): BluetoothDevice? {
         val bonded = adapter?.bondedDevices?.firstOrNull { it.address == address }
@@ -397,17 +410,29 @@ class BluetoothSessionRepository(
     }
 
     private fun ensureProfileProxy() {
-        if (hidDevice != null) {
+        if (hidDeviceProxy != null) {
             registerAppIfNeeded()
             return
         }
-        adapter?.getProfileProxy(context, profileListener, BluetoothProfile.HID_DEVICE)
+
+        if (profileProxyRequested) return
+
+        profileProxyRequested = true
+        val requested = adapter?.getProfileProxy(context, profileListener, BluetoothProfile.HID_DEVICE) ?: false
+        if (!requested) {
+            profileProxyRequested = false
+            _connectionState.value = ConnectionState.ERROR
+        }
     }
 
     @SuppressLint("MissingPermission")
     private fun registerAppIfNeeded() {
-        val hid = hidDevice ?: return
+        val hid = hidDeviceProxy ?: return
         if (appRegistered) return
+        if (!hasConnectPermission() || !hasAdvertisePermission()) {
+            _connectionState.value = ConnectionState.ERROR
+            return
+        }
 
         val descriptor = intArrayOf(
             0x05, 0x01,
@@ -461,12 +486,20 @@ class BluetoothSessionRepository(
             BluetoothHidDeviceAppQosSettings.MAX
         )
 
-        hid.registerApp(sdp, null, qos, callbackExecutor, hidCallback)
+        val registered = hid.registerApp(sdp, null, qos, callbackExecutor, hidCallback)
+        if (!registered) {
+            _connectionState.value = ConnectionState.ERROR
+        }
     }
 
     @SuppressLint("MissingPermission")
     private fun connectPendingHostIfReady() {
-        val hid = hidDevice ?: return
+        if (!hasConnectPermission()) {
+            _connectionState.value = ConnectionState.ERROR
+            return
+        }
+
+        val hid = hidDeviceProxy ?: return
         if (!appRegistered) return
         val pendingAddress = pendingHostAddress ?: return
         val host = findBondedDevice(pendingAddress)
@@ -475,7 +508,22 @@ class BluetoothSessionRepository(
             return
         }
 
-        if (!hid.connect(host)) {
+        val profileState = hid.getConnectionState(host)
+        if (profileState == BluetoothProfile.STATE_CONNECTED) {
+            applyConnectedHost(host)
+            return
+        }
+
+        if (profileState == BluetoothProfile.STATE_CONNECTING) {
+            _connectionState.value = ConnectionState.CONNECTING
+            return
+        }
+
+        val connectIssued = hid.connect(host)
+        if (!connectIssued) {
+            if (syncConnectedHostFromProfile(preferredAddress = host.address)) {
+                return
+            }
             _connectionState.value = ConnectionState.ERROR
             return
         }
@@ -484,9 +532,52 @@ class BluetoothSessionRepository(
     }
 
     @SuppressLint("MissingPermission")
+    private fun syncConnectedHostFromProfile(preferredAddress: String? = pendingHostAddress): Boolean {
+        if (!hasConnectPermission()) return false
+        val hid = hidDeviceProxy ?: return false
+
+        val connectedDevices = hid.connectedDevices
+        if (connectedDevices.isEmpty()) return false
+
+        val preferred = connectedDevices.firstOrNull { it.address == preferredAddress }
+        val selected = preferred ?: connectedDevices.firstOrNull()
+        if (selected != null) {
+            applyConnectedHost(selected)
+            return true
+        }
+
+        return false
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun applyConnectedHost(device: BluetoothDevice) {
+        connectedHost = device
+        pendingHostAddress = null
+
+        val connected = ScannedDevice(
+            name = device.name ?: "Unknown Device",
+            address = device.address
+        )
+
+        _connectedDevice.value = connected
+        knownDevicesStore.saveConnection(connected)
+        _savedDevices.value = knownDevicesStore.readKnownDevices()
+        _lastConnectedAddress.value = knownDevicesStore.readLastConnectedAddress()
+        _connectionState.value = ConnectionState.CONNECTED
+    }
+
+    private fun clearConnectedState(keepError: Boolean) {
+        connectedHost = null
+        _connectedDevice.value = null
+        if (!keepError || _connectionState.value != ConnectionState.ERROR) {
+            _connectionState.value = ConnectionState.DISCONNECTED
+        }
+    }
+
+    @SuppressLint("MissingPermission")
     private fun sendKeyStroke(stroke: HidKeyStroke): Boolean {
         val host = connectedHost ?: return false
-        val hid = hidDevice ?: return false
+        val hid = hidDeviceProxy ?: return false
 
         val pressReport = byteArrayOf(
             stroke.modifier,
