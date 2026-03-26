@@ -106,6 +106,8 @@ data class TypingControlUiState(
     val progress: Int = 0,
     val speed: Float = 1.0f,
     val typoProbability: Float = 0.18f,
+    val wordGapMs: Int = 80,
+    val jitterPercent: Int = 18,
     val bluetoothState: BluetoothAdapterState = BluetoothAdapterState.UNAVAILABLE,
     val connectionState: ConnectionState = ConnectionState.DISCONNECTED
 )
@@ -120,6 +122,9 @@ data class SettingsUiState(
     val profile: String = "NORMAL",
     val speed: Float = 1.0f,
     val typoProbability: Float = 0.18f,
+    val wordGapMs: Int = 80,
+    val jitterPercent: Int = 18,
+    val themeMode: String = "SYSTEM",
     val isSaving: Boolean = false,
     val showInfoDialog: Boolean = false
 )
@@ -128,6 +133,9 @@ sealed interface SettingsUiEvent {
     data class OnProfileChange(val value: String) : SettingsUiEvent
     data class OnSpeedChange(val value: Float) : SettingsUiEvent
     data class OnTypoProbabilityChange(val value: Float) : SettingsUiEvent
+    data class OnWordGapChange(val value: Float) : SettingsUiEvent
+    data class OnJitterChange(val value: Float) : SettingsUiEvent
+    data class OnThemeModeChange(val value: String) : SettingsUiEvent
     data object OnSave : SettingsUiEvent
     data object OnHelpClick : SettingsUiEvent
     data object OnDismissHelp : SettingsUiEvent

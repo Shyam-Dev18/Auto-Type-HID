@@ -322,11 +322,20 @@ class BluetoothSessionRepository(
         return sendKeyStroke(HidKeyStroke(keyCode = 0x2A))
     }
 
-    fun computeAggressiveDelay(speedMultiplier: Float): Long {
+    fun computeAggressiveDelay(
+        speedMultiplier: Float,
+        wordGapMs: Int,
+        jitterPercent: Int,
+        isWordGap: Boolean
+    ): Long {
         val safeSpeed = speedMultiplier.coerceIn(0.5f, 2.5f)
         val base = (110f / safeSpeed).toLong()
-        val jitter = Random.nextLong(25L, 140L)
-        return (base + jitter).coerceAtMost(320L)
+        val wordGap = if (isWordGap) wordGapMs.coerceIn(0, 1000).toLong() else 0L
+        val raw = (base + wordGap).coerceAtLeast(20L)
+        val jitterRatio = jitterPercent.coerceIn(0, 80) / 100f
+        val jitterRange = (raw * jitterRatio).toLong().coerceAtLeast(1L)
+        val randomDelta = Random.nextLong(-jitterRange, jitterRange + 1L)
+        return (raw + randomDelta).coerceIn(15L, 2000L)
     }
 
     private fun canScan(): Boolean {
@@ -436,9 +445,9 @@ class BluetoothSessionRepository(
         ).map { it.toByte() }.toByteArray()
 
         val sdp = BluetoothHidDeviceAppSdpSettings(
-            "AutoTypeHID",
-            "Bluetooth keyboard typing",
-            "AutoTypeHID",
+            "ZEBRONICS 76R4 Keyboard",
+            "Boot Keyboard HID",
+            "ZEBRONICS",
             BluetoothHidDevice.SUBCLASS1_KEYBOARD,
             descriptor
         )

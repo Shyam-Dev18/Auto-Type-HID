@@ -96,7 +96,7 @@ fun SplashScreen(
             if (state.isLoading) {
                 CircularProgressIndicator()
                 Spacer(modifier = Modifier.height(12.dp))
-                Text("Initializing AutoType HID")
+                Text("Initializing Auto Type HID")
             } else {
                 Text("Ready")
             }
@@ -138,7 +138,7 @@ fun PermissionsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("AutoTypeHID needs Bluetooth and Location permissions to discover and connect to HID hosts.")
+            Text("Auto Type HID needs Bluetooth and Location permissions to discover and connect to HID hosts.")
             Text("Location is required by Android for Bluetooth scanning and is not used for location tracking.")
 
             Button(onClick = {
@@ -582,7 +582,7 @@ fun SettingsScreen(
     if (state.showInfoDialog) {
         AlertDialog(
             onDismissRequest = { onEvent(SettingsUiEvent.OnDismissHelp) },
-            title = { Text("AutoTypeHID") },
+            title = { Text("Auto Type HID") },
             text = { Text("Bluetooth HID typing app. Contact support: dev@autotypehid.app") },
             confirmButton = {
                 TextButton(onClick = { onEvent(SettingsUiEvent.OnDismissHelp) }) {
@@ -615,15 +615,7 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Profile")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("NORMAL", "FAST", "SLOW").forEach { profile ->
-                    TextButton(onClick = { onEvent(SettingsUiEvent.OnProfileChange(profile)) }) {
-                        Text(if (state.profile == profile) "$profile *" else profile)
-                    }
-                }
-            }
-
+            Text("Typing Behavior")
             Text("Typing Speed: ${"%.2f".format(state.speed)}")
             Slider(
                 value = state.speed,
@@ -634,9 +626,45 @@ fun SettingsScreen(
             Text("Typo Probability: ${"%.2f".format(state.typoProbability)}")
             Slider(
                 value = state.typoProbability,
-                valueRange = 0f..0.3f,
+                valueRange = 0f..0.35f,
                 onValueChange = { onEvent(SettingsUiEvent.OnTypoProbabilityChange(it)) }
             )
+
+            Text("Word Gap Delay: ${state.wordGapMs} ms")
+            Slider(
+                value = state.wordGapMs.toFloat(),
+                valueRange = 0f..300f,
+                onValueChange = { onEvent(SettingsUiEvent.OnWordGapChange(it)) }
+            )
+
+            Text("Jitter Randomization: ${state.jitterPercent}%")
+            Slider(
+                value = state.jitterPercent.toFloat(),
+                valueRange = 0f..80f,
+                onValueChange = { onEvent(SettingsUiEvent.OnJitterChange(it)) }
+            )
+
+            Text("Profiles")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("NORMAL", "FAST", "SLOW").forEach { profile ->
+                    TextButton(onClick = { onEvent(SettingsUiEvent.OnProfileChange(profile)) }) {
+                        Text(if (state.profile == profile) "$profile *" else profile)
+                    }
+                }
+            }
+
+            if (state.profile == "CUSTOM") {
+                Text("Current profile: CUSTOM")
+            }
+
+            Text("Appearance")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("SYSTEM", "LIGHT", "DARK").forEach { mode ->
+                    TextButton(onClick = { onEvent(SettingsUiEvent.OnThemeModeChange(mode)) }) {
+                        Text(if (state.themeMode == mode) "$mode *" else mode)
+                    }
+                }
+            }
 
             Button(onClick = { onEvent(SettingsUiEvent.OnSave) }, enabled = !state.isSaving) {
                 Text(if (state.isSaving) "Saving..." else "Save")
@@ -644,10 +672,10 @@ fun SettingsScreen(
 
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Text("About")
-                    Text("AutoTypeHID")
+                    Text("App Info")
+                    Text("Auto Type HID")
                     Text("Bluetooth HID typing with script-based automation.")
-                    Text("Version: 1.0.0")
+                    Text("Version: 1.1.0")
                 }
             }
 
@@ -658,7 +686,7 @@ fun SettingsScreen(
                     TextButton(onClick = {
                         val intent = Intent(Intent.ACTION_SENDTO).apply {
                             data = Uri.parse("mailto:dev@autotypehid.app")
-                            putExtra(Intent.EXTRA_SUBJECT, "AutoTypeHID Support")
+                            putExtra(Intent.EXTRA_SUBJECT, "Auto Type HID Support")
                         }
                         context.startActivity(intent)
                     }) {

@@ -311,7 +311,9 @@ class TypingControlViewModel : ViewModel() {
                 _uiState.update {
                     it.copy(
                         speed = settings.speed,
-                        typoProbability = settings.typoProbability.coerceIn(0f, 0.35f)
+                        typoProbability = settings.typoProbability.coerceIn(0f, 0.35f),
+                        wordGapMs = settings.wordGapMs,
+                        jitterPercent = settings.jitterPercent
                     )
                 }
             }
@@ -349,7 +351,9 @@ class TypingControlViewModel : ViewModel() {
                 AppContainer.controlTypingUseCase.start(
                     state.selectedScriptContent,
                     state.speed,
-                    state.typoProbability
+                    state.typoProbability,
+                    state.wordGapMs,
+                    state.jitterPercent
                 )
             }
             TypingControlUiEvent.OnPauseOrResume -> {
@@ -375,7 +379,10 @@ class SettingsViewModel : ViewModel() {
                     it.copy(
                         profile = settings.profile,
                         speed = settings.speed,
-                        typoProbability = settings.typoProbability
+                        typoProbability = settings.typoProbability,
+                        wordGapMs = settings.wordGapMs,
+                        jitterPercent = settings.jitterPercent,
+                        themeMode = settings.themeMode
                     )
                 }
             }
@@ -384,20 +391,47 @@ class SettingsViewModel : ViewModel() {
 
     fun onEvent(event: SettingsUiEvent) {
         when (event) {
-            is SettingsUiEvent.OnProfileChange -> _uiState.update { it.copy(profile = event.value) }
+            is SettingsUiEvent.OnProfileChange -> {
+                val preset = profilePreset(event.value)
+                _uiState.update {
+                    it.copy(
+                        profile = event.value,
+                        speed = preset.speed,
+                        typoProbability = preset.typo,
+                        wordGapMs = preset.wordGapMs,
+                        jitterPercent = preset.jitterPercent
+                    )
+                }
+                persistCurrentSettings()
+            }
             is SettingsUiEvent.OnSpeedChange -> {
                 _uiState.update { it.copy(speed = event.value) }
-                viewModelScope.launch {
-                    val state = _uiState.value
-                    AppContainer.updateSettingsUseCase(state.profile, state.speed, state.typoProbability)
-                }
+                syncProfileToCustomIfNeeded()
+                persistCurrentSettings()
             }
-            is SettingsUiEvent.OnTypoProbabilityChange -> _uiState.update { it.copy(typoProbability = event.value) }
+            is SettingsUiEvent.OnTypoProbabilityChange -> {
+                _uiState.update { it.copy(typoProbability = event.value) }
+                syncProfileToCustomIfNeeded()
+                persistCurrentSettings()
+            }
+            is SettingsUiEvent.OnWordGapChange -> {
+                _uiState.update { it.copy(wordGapMs = event.value.toInt()) }
+                syncProfileToCustomIfNeeded()
+                persistCurrentSettings()
+            }
+            is SettingsUiEvent.OnJitterChange -> {
+                _uiState.update { it.copy(jitterPercent = event.value.toInt()) }
+                syncProfileToCustomIfNeeded()
+                persistCurrentSettings()
+            }
+            is SettingsUiEvent.OnThemeModeChange -> {
+                _uiState.update { it.copy(themeMode = event.value) }
+                persistCurrentSettings()
+            }
             SettingsUiEvent.OnSave -> {
-                val state = _uiState.value
                 viewModelScope.launch {
                     _uiState.update { it.copy(isSaving = true) }
-                    AppContainer.updateSettingsUseCase(state.profile, state.speed, state.typoProbability)
+                    persistCurrentSettingsInternal()
                     _uiState.update { it.copy(isSaving = false) }
                 }
             }
@@ -405,4 +439,50 @@ class SettingsViewModel : ViewModel() {
             SettingsUiEvent.OnDismissHelp -> _uiState.update { it.copy(showInfoDialog = false) }
         }
     }
+
+    private fun persistCurrentSettings() {
+        viewModelScope.launch {
+            persistCurrentSettingsInternal()
+        }
+    }
+
+    private suspend fun persistCurrentSettingsInternal() {
+        val state = _uiState.value
+        AppContainer.updateSettingsUseCase(
+            profile = state.profile,
+            speed = state.speed,
+            typoProbability = state.typoProbability,
+            wordGapMs = state.wordGapMs,
+            jitterPercent = state.jitterPercent,
+            themeMode = state.themeMode
+        )
+    }
+
+    private fun syncProfileToCustomIfNeeded() {
+        val state = _uiState.value
+        if (state.profile !in setOf("NORMAL", "FAST", "SLOW")) return
+        val preset = profilePreset(state.profile)
+        val changed = state.speed != preset.speed ||
+            state.typoProbability != preset.typo ||
+            state.wordGapMs != preset.wordGapMs ||
+            state.jitterPercent != preset.jitterPercent
+        if (changed) {
+            _uiState.update { it.copy(profile = "CUSTOM") }
+        }
+    }
+
+    private fun profilePreset(profile: String): ProfilePreset {
+        return when (profile) {
+            "FAST" -> ProfilePreset(speed = 1.7f, typo = 0.10f, wordGapMs = 45, jitterPercent = 24)
+            "SLOW" -> ProfilePreset(speed = 0.72f, typo = 0.22f, wordGapMs = 140, jitterPercent = 14)
+            else -> ProfilePreset(speed = 1.0f, typo = 0.18f, wordGapMs = 80, jitterPercent = 18)
+        }
+    }
+
+    private data class ProfilePreset(
+        val speed: Float,
+        val typo: Float,
+        val wordGapMs: Int,
+        val jitterPercent: Int
+    )
 }

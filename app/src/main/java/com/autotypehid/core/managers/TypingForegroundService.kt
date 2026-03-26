@@ -34,7 +34,9 @@ class TypingForegroundService : Service() {
                 val content = intent.getStringExtra(EXTRA_CONTENT).orEmpty()
                 val speed = intent.getFloatExtra(EXTRA_SPEED, 1.0f).coerceAtLeast(0.2f)
                 val typoProbability = intent.getFloatExtra(EXTRA_TYPO_PROBABILITY, 0.18f).coerceIn(0f, 0.35f)
-                startTyping(content, speed, typoProbability)
+                val wordGapMs = intent.getIntExtra(EXTRA_WORD_GAP_MS, 80)
+                val jitterPercent = intent.getIntExtra(EXTRA_JITTER_PERCENT, 18)
+                startTyping(content, speed, typoProbability, wordGapMs, jitterPercent)
             }
             ACTION_PAUSE -> TypingServiceStore.setState(TypingState.PAUSED)
             ACTION_RESUME -> TypingServiceStore.setState(TypingState.RUNNING)
@@ -49,7 +51,13 @@ class TypingForegroundService : Service() {
         scope.cancel()
     }
 
-    private fun startTyping(content: String, speed: Float, typoProbability: Float) {
+    private fun startTyping(
+        content: String,
+        speed: Float,
+        typoProbability: Float,
+        wordGapMs: Int,
+        jitterPercent: Int
+    ) {
         typingJob?.cancel()
         typingJob = scope.launch {
             if (content.isBlank()) {
@@ -76,7 +84,7 @@ class TypingForegroundService : Service() {
                     return@launch
                 }
 
-                maybeInjectTypo(char, typoProbability, speed)
+                maybeInjectTypo(char, typoProbability, speed, wordGapMs, jitterPercent)
 
                 val sent = AppContainer.bluetoothRepository.sendCharacter(char)
                 if (!sent) {
@@ -85,7 +93,14 @@ class TypingForegroundService : Service() {
                     return@launch
                 }
 
-                delay(AppContainer.bluetoothRepository.computeAggressiveDelay(speed))
+                delay(
+                    AppContainer.bluetoothRepository.computeAggressiveDelay(
+                        speedMultiplier = speed,
+                        wordGapMs = wordGapMs,
+                        jitterPercent = jitterPercent,
+                        isWordGap = char.isWhitespace()
+                    )
+                )
                 TypingServiceStore.setProgress(((index + 1) * 100) / total)
             }
 
@@ -95,7 +110,13 @@ class TypingForegroundService : Service() {
         }
     }
 
-    private suspend fun maybeInjectTypo(currentChar: Char, typoProbability: Float, speed: Float) {
+    private suspend fun maybeInjectTypo(
+        currentChar: Char,
+        typoProbability: Float,
+        speed: Float,
+        wordGapMs: Int,
+        jitterPercent: Int
+    ) {
         if (!currentChar.isLetter()) return
         if (Random.nextFloat() > typoProbability) return
 
@@ -108,9 +129,25 @@ class TypingForegroundService : Service() {
         val typoSent = AppContainer.bluetoothRepository.sendCharacter(typoChar)
         if (!typoSent) return
 
-        delay(AppContainer.bluetoothRepository.computeAggressiveDelay(speed))
+        delay(
+            AppContainer.bluetoothRepository.computeAggressiveDelay(
+                speedMultiplier = speed,
+                wordGapMs = wordGapMs,
+                jitterPercent = jitterPercent,
+                isWordGap = false
+            )
+        )
         AppContainer.bluetoothRepository.sendBackspace()
-        delay((AppContainer.bluetoothRepository.computeAggressiveDelay(speed) / 2).coerceAtLeast(25L))
+        delay(
+            (
+                AppContainer.bluetoothRepository.computeAggressiveDelay(
+                    speedMultiplier = speed,
+                    wordGapMs = wordGapMs,
+                    jitterPercent = jitterPercent,
+                    isWordGap = false
+                ) / 2
+            ).coerceAtLeast(25L)
+        )
     }
 
     private fun stopTypingAndSelf() {
@@ -149,18 +186,29 @@ class TypingForegroundService : Service() {
         private const val EXTRA_CONTENT = "extra_content"
         private const val EXTRA_SPEED = "extra_speed"
         private const val EXTRA_TYPO_PROBABILITY = "extra_typo_probability"
+        private const val EXTRA_WORD_GAP_MS = "extra_word_gap_ms"
+        private const val EXTRA_JITTER_PERCENT = "extra_jitter_percent"
 
         const val ACTION_START = "com.autotypehid.typing.START"
         const val ACTION_PAUSE = "com.autotypehid.typing.PAUSE"
         const val ACTION_RESUME = "com.autotypehid.typing.RESUME"
         const val ACTION_STOP = "com.autotypehid.typing.STOP"
 
-        fun start(context: Context, content: String, speed: Float, typoProbability: Float) {
+        fun start(
+            context: Context,
+            content: String,
+            speed: Float,
+            typoProbability: Float,
+            wordGapMs: Int,
+            jitterPercent: Int
+        ) {
             val intent = Intent(context, TypingForegroundService::class.java)
                 .setAction(ACTION_START)
                 .putExtra(EXTRA_CONTENT, content)
                 .putExtra(EXTRA_SPEED, speed)
                 .putExtra(EXTRA_TYPO_PROBABILITY, typoProbability)
+                .putExtra(EXTRA_WORD_GAP_MS, wordGapMs)
+                .putExtra(EXTRA_JITTER_PERCENT, jitterPercent)
             context.startForegroundService(intent)
         }
 

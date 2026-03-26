@@ -6,7 +6,21 @@ import javax.inject.Inject
 class UpdateSettingsUseCase @Inject constructor(
     private val settingsRepository: SettingsRepository
 ) {
-    suspend operator fun invoke(profile: String, speed: Float, typoProbability: Float) {
-        settingsRepository.updateSettings(profile, speed, typoProbability)
+    suspend operator fun invoke(
+        profile: String,
+        speed: Float,
+        typoProbability: Float,
+        wordGapMs: Int,
+        jitterPercent: Int,
+        themeMode: String
+    ) {
+        settingsRepository.updateSettings(
+            profile = profile,
+            speed = speed,
+            typoProbability = typoProbability,
+            wordGapMs = wordGapMs,
+            jitterPercent = jitterPercent,
+            themeMode = themeMode
+        )
     }
 }
