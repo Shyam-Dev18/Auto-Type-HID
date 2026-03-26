@@ -14,7 +14,10 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
 import androidx.core.content.ContextCompat
+import com.autotypehid.data.local.KnownDevicesStore
+import com.autotypehid.domain.model.BluetoothAdapterState
 import com.autotypehid.domain.model.ConnectionState
 import com.autotypehid.domain.model.ScannedDevice
 import java.util.concurrent.Executor
@@ -39,12 +42,30 @@ class BluetoothSessionRepository(
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
 
+    private val _bluetoothState = MutableStateFlow(readBluetoothAdapterState())
+    val bluetoothState: StateFlow<BluetoothAdapterState> = _bluetoothState.asStateFlow()
+
+    private val _connectedDevice = MutableStateFlow<ScannedDevice?>(null)
+    val connectedDevice: StateFlow<ScannedDevice?> = _connectedDevice.asStateFlow()
+
+    private val knownDevicesStore = KnownDevicesStore(context)
+    private val _savedDevices = MutableStateFlow(knownDevicesStore.readKnownDevices())
+    val savedDevices: StateFlow<List<ScannedDevice>> = _savedDevices.asStateFlow()
+
+    private val _lastConnectedAddress = MutableStateFlow(knownDevicesStore.readLastConnectedAddress())
+    val lastConnectedAddress: StateFlow<String?> = _lastConnectedAddress.asStateFlow()
+
     private var hidDevice: BluetoothHidDevice? = null
     private var appRegistered = false
     private var pendingHostAddress: String? = null
     private var connectedHost: BluetoothDevice? = null
     private var scanReceiverRegistered = false
+    private var bluetoothStateReceiverRegistered = false
     private val discoveredDevices = linkedMapOf<String, ScannedDevice>()
+
+    init {
+        registerBluetoothStateReceiverIfNeeded()
+    }
 
     private val scanReceiver = object : BroadcastReceiver() {
         @SuppressLint("MissingPermission")
@@ -70,6 +91,22 @@ class BluetoothSessionRepository(
                         _connectionState.value = if (connectedHost != null) ConnectionState.CONNECTED else ConnectionState.DISCONNECTED
                     }
                 }
+            }
+        }
+    }
+
+    private val bluetoothStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
+
+            val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
+            _bluetoothState.value = mapAdapterState(state)
+
+            if (_bluetoothState.value == BluetoothAdapterState.OFF || _bluetoothState.value == BluetoothAdapterState.UNAVAILABLE) {
+                connectedHost = null
+                _connectedDevice.value = null
+                _isScanning.value = false
+                _connectionState.value = ConnectionState.DISCONNECTED
             }
         }
     }
@@ -107,6 +144,14 @@ class BluetoothSessionRepository(
             when (state) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     connectedHost = device
+                    val connected = ScannedDevice(
+                        name = device.name ?: "Unknown Device",
+                        address = device.address
+                    )
+                    _connectedDevice.value = connected
+                    knownDevicesStore.saveConnection(connected)
+                    _savedDevices.value = knownDevicesStore.readKnownDevices()
+                    _lastConnectedAddress.value = knownDevicesStore.readLastConnectedAddress()
                     _connectionState.value = ConnectionState.CONNECTED
                 }
 
@@ -118,6 +163,7 @@ class BluetoothSessionRepository(
                     if (connectedHost?.address == device.address) {
                         connectedHost = null
                     }
+                    _connectedDevice.value = null
                     _connectionState.value = ConnectionState.DISCONNECTED
                 }
 
@@ -207,7 +253,24 @@ class BluetoothSessionRepository(
             hid.disconnect(host)
         }
         connectedHost = null
+        _connectedDevice.value = null
         _connectionState.value = ConnectionState.DISCONNECTED
+    }
+
+    fun reconnectLastDevice() {
+        val address = _lastConnectedAddress.value
+        if (address.isNullOrBlank()) {
+            _connectionState.value = ConnectionState.ERROR
+            return
+        }
+        connect(address)
+    }
+
+    fun openBluetoothSettings() {
+        val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
     }
 
     fun isConnected(): Boolean = _connectionState.value == ConnectionState.CONNECTED
@@ -272,6 +335,28 @@ class BluetoothSessionRepository(
         }
         context.registerReceiver(scanReceiver, filter)
         scanReceiverRegistered = true
+    }
+
+    private fun registerBluetoothStateReceiverIfNeeded() {
+        if (bluetoothStateReceiverRegistered) return
+        val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
+        context.registerReceiver(bluetoothStateReceiver, filter)
+        bluetoothStateReceiverRegistered = true
+    }
+
+    private fun readBluetoothAdapterState(): BluetoothAdapterState {
+        val btAdapter = adapter ?: return BluetoothAdapterState.UNAVAILABLE
+        return mapAdapterState(btAdapter.state)
+    }
+
+    private fun mapAdapterState(state: Int): BluetoothAdapterState {
+        return when (state) {
+            BluetoothAdapter.STATE_ON -> BluetoothAdapterState.ON
+            BluetoothAdapter.STATE_OFF -> BluetoothAdapterState.OFF
+            BluetoothAdapter.STATE_TURNING_ON -> BluetoothAdapterState.TURNING_ON
+            BluetoothAdapter.STATE_TURNING_OFF -> BluetoothAdapterState.TURNING_OFF
+            else -> BluetoothAdapterState.UNAVAILABLE
+        }
     }
 
     private fun ensureProfileProxy() {

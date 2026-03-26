@@ -1,5 +1,6 @@
 package com.autotypehid.presentation.state
 
+import com.autotypehid.domain.model.BluetoothAdapterState
 import com.autotypehid.domain.model.ConnectionState
 import com.autotypehid.domain.model.Script
 import com.autotypehid.domain.model.TypingState
@@ -9,7 +10,10 @@ data class SplashUiState(
 )
 
 sealed interface SplashUiEvent {
-    data object OnReady : SplashUiEvent
+    data class OnReady(
+        val bluetoothGranted: Boolean,
+        val notificationsGranted: Boolean
+    ) : SplashUiEvent
 }
 
 data class PermissionsUiState(
@@ -43,14 +47,21 @@ sealed interface DeviceScanUiEvent {
 }
 
 data class DashboardUiState(
+    val bluetoothState: BluetoothAdapterState = BluetoothAdapterState.UNAVAILABLE,
     val connectionState: ConnectionState = ConnectionState.DISCONNECTED,
-    val selectedScriptName: String = "None"
+    val connectedDeviceName: String = "No active device",
+    val selectedScriptName: String = "None",
+    val savedDevicesCount: Int = 0,
+    val lastConnectedAddress: String? = null
 )
 
 sealed interface DashboardUiEvent {
     data object OnScriptsClick : DashboardUiEvent
     data object OnSettingsClick : DashboardUiEvent
     data object OnTypingClick : DashboardUiEvent
+    data object OnManageDeviceClick : DashboardUiEvent
+    data object OnReconnectClick : DashboardUiEvent
+    data object OnBluetoothSettingsClick : DashboardUiEvent
 }
 
 data class ScriptsListUiState(
@@ -86,7 +97,9 @@ data class TypingControlUiState(
     val typingState: TypingState = TypingState.IDLE,
     val progress: Int = 0,
     val speed: Float = 1.0f,
-    val typoProbability: Float = 0.18f
+    val typoProbability: Float = 0.18f,
+    val bluetoothState: BluetoothAdapterState = BluetoothAdapterState.UNAVAILABLE,
+    val connectionState: ConnectionState = ConnectionState.DISCONNECTED
 )
 
 sealed interface TypingControlUiEvent {

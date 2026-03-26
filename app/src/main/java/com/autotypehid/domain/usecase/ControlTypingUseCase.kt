@@ -22,3 +22,4 @@ class ControlTypingUseCase(
         TypingForegroundService.stop(context)
     }
 }
+

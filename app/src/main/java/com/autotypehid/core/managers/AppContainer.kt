@@ -14,13 +14,19 @@ import com.autotypehid.domain.usecase.DeleteScriptUseCase
 import com.autotypehid.domain.usecase.DisconnectDeviceUseCase
 import com.autotypehid.domain.usecase.LoadScriptUseCase
 import com.autotypehid.domain.usecase.ObserveBluetoothDevicesUseCase
+import com.autotypehid.domain.usecase.ObserveBluetoothStateUseCase
 import com.autotypehid.domain.usecase.ObserveConnectionStateUseCase
+import com.autotypehid.domain.usecase.ObserveConnectedDeviceUseCase
 import com.autotypehid.domain.usecase.ObserveIsScanningUseCase
+import com.autotypehid.domain.usecase.ObserveLastConnectedAddressUseCase
+import com.autotypehid.domain.usecase.ObserveSavedDevicesUseCase
 import com.autotypehid.domain.usecase.ObserveScriptsUseCase
 import com.autotypehid.domain.usecase.ObserveSelectedScriptUseCase
 import com.autotypehid.domain.usecase.ObserveSettingsUseCase
 import com.autotypehid.domain.usecase.ObserveTypingProgressUseCase
 import com.autotypehid.domain.usecase.ObserveTypingStateUseCase
+import com.autotypehid.domain.usecase.OpenBluetoothSettingsUseCase
+import com.autotypehid.domain.usecase.ReconnectLastDeviceUseCase
 import com.autotypehid.domain.usecase.SaveScriptUseCase
 import com.autotypehid.domain.usecase.SelectScriptUseCase
 import com.autotypehid.domain.usecase.StartDeviceScanUseCase
@@ -76,12 +82,18 @@ object AppContainer {
     val updateSettingsUseCase by lazy { UpdateSettingsUseCase(settingsRepository) }
 
     val observeBluetoothDevicesUseCase by lazy { ObserveBluetoothDevicesUseCase(bluetoothSessionRepository) }
+    val observeBluetoothStateUseCase by lazy { ObserveBluetoothStateUseCase(bluetoothSessionRepository) }
     val observeConnectionStateUseCase by lazy { ObserveConnectionStateUseCase(bluetoothSessionRepository) }
+    val observeConnectedDeviceUseCase by lazy { ObserveConnectedDeviceUseCase(bluetoothSessionRepository) }
     val observeIsScanningUseCase by lazy { ObserveIsScanningUseCase(bluetoothSessionRepository) }
+    val observeSavedDevicesUseCase by lazy { ObserveSavedDevicesUseCase(bluetoothSessionRepository) }
+    val observeLastConnectedAddressUseCase by lazy { ObserveLastConnectedAddressUseCase(bluetoothSessionRepository) }
     val startDeviceScanUseCase by lazy { StartDeviceScanUseCase(bluetoothSessionRepository) }
     val stopDeviceScanUseCase by lazy { StopDeviceScanUseCase(bluetoothSessionRepository) }
     val connectDeviceUseCase by lazy { ConnectDeviceUseCase(bluetoothSessionRepository) }
     val disconnectDeviceUseCase by lazy { DisconnectDeviceUseCase(bluetoothSessionRepository) }
+    val reconnectLastDeviceUseCase by lazy { ReconnectLastDeviceUseCase(bluetoothSessionRepository) }
+    val openBluetoothSettingsUseCase by lazy { OpenBluetoothSettingsUseCase(bluetoothSessionRepository) }
 
     val observeTypingStateUseCase by lazy { ObserveTypingStateUseCase() }
     val observeTypingProgressUseCase by lazy { ObserveTypingProgressUseCase() }

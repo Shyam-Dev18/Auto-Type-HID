@@ -1,7 +1,7 @@
 package com.autotypehid.presentation.navigation
 
 object Routes {
-    const val SPLASH = "splash"
+    const val INIT = "init"
     const val PERMISSIONS = "permissions"
     const val DEVICE_SCAN = "device_scan"
     const val DASHBOARD = "dashboard"

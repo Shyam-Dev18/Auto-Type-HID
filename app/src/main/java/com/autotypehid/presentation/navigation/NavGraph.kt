@@ -37,16 +37,16 @@ fun AutoTypeNavGraph() {
 
     NavHost(
         navController = navController,
-        startDestination = Routes.SPLASH
+        startDestination = Routes.INIT
     ) {
-        composable(Routes.SPLASH) {
+        composable(Routes.INIT) {
             val vm: SplashViewModel = viewModel()
             val uiState = vm.uiState.collectAsStateWithLifecycle().value
 
             LaunchedEffect(vm) {
                 vm.navigation.collect { route ->
                     navController.navigate(route) {
-                        popUpTo(Routes.SPLASH) { inclusive = true }
+                        popUpTo(Routes.INIT) { inclusive = true }
                     }
                 }
             }
@@ -79,20 +79,13 @@ fun AutoTypeNavGraph() {
             val vm: DeviceScanViewModel = viewModel()
             val uiState = vm.uiState.collectAsStateWithLifecycle().value
 
-            LaunchedEffect(vm) {
-                vm.navigation.collect { route ->
-                    navController.navigate(route) {
-                        popUpTo(Routes.DEVICE_SCAN) { inclusive = true }
-                    }
-                }
-            }
-
             DeviceScanScreen(
                 state = uiState,
                 onStartScan = { vm.onEvent(DeviceScanUiEvent.OnStartScan) },
                 onStopScan = { vm.onEvent(DeviceScanUiEvent.OnStopScan) },
                 onConnect = { address -> vm.onEvent(DeviceScanUiEvent.OnConnect(address)) },
-                onDisconnect = { vm.onEvent(DeviceScanUiEvent.OnDisconnect) }
+                onDisconnect = { vm.onEvent(DeviceScanUiEvent.OnDisconnect) },
+                onBack = { navController.popBackStack() }
             )
         }
 
@@ -108,7 +101,10 @@ fun AutoTypeNavGraph() {
                 state = uiState,
                 onScripts = { vm.onEvent(DashboardUiEvent.OnScriptsClick) },
                 onSettings = { vm.onEvent(DashboardUiEvent.OnSettingsClick) },
-                onTyping = { vm.onEvent(DashboardUiEvent.OnTypingClick) }
+                onTyping = { vm.onEvent(DashboardUiEvent.OnTypingClick) },
+                onManageDevice = { vm.onEvent(DashboardUiEvent.OnManageDeviceClick) },
+                onReconnect = { vm.onEvent(DashboardUiEvent.OnReconnectClick) },
+                onOpenBluetoothSettings = { vm.onEvent(DashboardUiEvent.OnBluetoothSettingsClick) }
             )
         }
 

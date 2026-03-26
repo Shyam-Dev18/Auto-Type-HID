@@ -43,9 +43,14 @@ class SplashViewModel : ViewModel() {
     fun onEvent(event: SplashUiEvent) {
         if (event is SplashUiEvent.OnReady) {
             viewModelScope.launch {
-                delay(700)
+                delay(500)
                 _uiState.update { it.copy(isLoading = false) }
-                _navigation.emit(Routes.PERMISSIONS)
+
+                if (event.bluetoothGranted && event.notificationsGranted) {
+                    _navigation.emit(Routes.DASHBOARD)
+                } else {
+                    _navigation.emit(Routes.PERMISSIONS)
+                }
             }
         }
     }
@@ -70,11 +75,15 @@ class PermissionsViewModel : ViewModel() {
                         error = if (canContinue) null else "Required permissions are missing"
                     )
                 }
+
+                if (canContinue) {
+                    viewModelScope.launch { _navigation.emit(Routes.DASHBOARD) }
+                }
             }
 
             PermissionsUiEvent.OnContinue -> {
                 if (_uiState.value.canContinue) {
-                    viewModelScope.launch { _navigation.emit(Routes.DEVICE_SCAN) }
+                    viewModelScope.launch { _navigation.emit(Routes.DASHBOARD) }
                 } else {
                     _uiState.update { it.copy(error = "Grant required permissions to continue") }
                 }
@@ -86,9 +95,6 @@ class PermissionsViewModel : ViewModel() {
 class DeviceScanViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(DeviceScanUiState())
     val uiState: StateFlow<DeviceScanUiState> = _uiState.asStateFlow()
-
-    private val _navigation = MutableSharedFlow<String>()
-    val navigation: SharedFlow<String> = _navigation.asSharedFlow()
 
     init {
         viewModelScope.launch {
@@ -104,9 +110,6 @@ class DeviceScanViewModel : ViewModel() {
         viewModelScope.launch {
             AppContainer.observeConnectionStateUseCase().collect { state ->
                 _uiState.update { it.copy(connectionState = state) }
-                if (state == ConnectionState.CONNECTED) {
-                    _navigation.emit(Routes.DASHBOARD)
-                }
             }
         }
     }
@@ -130,8 +133,30 @@ class DashboardViewModel : ViewModel() {
 
     init {
         viewModelScope.launch {
+            AppContainer.observeBluetoothStateUseCase().collect { state ->
+                _uiState.update { it.copy(bluetoothState = state) }
+            }
+        }
+        viewModelScope.launch {
             AppContainer.observeConnectionStateUseCase().collect { state ->
                 _uiState.update { it.copy(connectionState = state) }
+            }
+        }
+        viewModelScope.launch {
+            AppContainer.observeConnectedDeviceUseCase().collect { device ->
+                _uiState.update {
+                    it.copy(connectedDeviceName = device?.name ?: "No active device")
+                }
+            }
+        }
+        viewModelScope.launch {
+            AppContainer.observeSavedDevicesUseCase().collect { devices ->
+                _uiState.update { it.copy(savedDevicesCount = devices.size) }
+            }
+        }
+        viewModelScope.launch {
+            AppContainer.observeLastConnectedAddressUseCase().collect { address ->
+                _uiState.update { it.copy(lastConnectedAddress = address) }
             }
         }
         viewModelScope.launch {
@@ -147,6 +172,9 @@ class DashboardViewModel : ViewModel() {
                 DashboardUiEvent.OnScriptsClick -> _navigation.emit(Routes.SCRIPTS_LIST)
                 DashboardUiEvent.OnSettingsClick -> _navigation.emit(Routes.SETTINGS)
                 DashboardUiEvent.OnTypingClick -> _navigation.emit(Routes.TYPING_CONTROL)
+                DashboardUiEvent.OnManageDeviceClick -> _navigation.emit(Routes.DEVICE_SCAN)
+                DashboardUiEvent.OnReconnectClick -> AppContainer.reconnectLastDeviceUseCase()
+                DashboardUiEvent.OnBluetoothSettingsClick -> AppContainer.openBluetoothSettingsUseCase()
             }
         }
     }
@@ -180,7 +208,6 @@ class ScriptsListViewModel : ViewModel() {
             }
             is ScriptsListUiEvent.OnSelect -> {
                 AppContainer.selectScriptUseCase(event.script)
-                viewModelScope.launch { _navigation.emit(Routes.DASHBOARD) }
             }
         }
     }
@@ -280,12 +307,26 @@ class TypingControlViewModel : ViewModel() {
                 _uiState.update { it.copy(progress = progress) }
             }
         }
+        viewModelScope.launch {
+            AppContainer.observeBluetoothStateUseCase().collect { bluetoothState ->
+                _uiState.update { it.copy(bluetoothState = bluetoothState) }
+            }
+        }
+        viewModelScope.launch {
+            AppContainer.observeConnectionStateUseCase().collect { connectionState ->
+                _uiState.update { it.copy(connectionState = connectionState) }
+                if (connectionState != ConnectionState.CONNECTED && _uiState.value.typingState != TypingState.IDLE) {
+                    AppContainer.controlTypingUseCase.stop()
+                }
+            }
+        }
     }
 
     fun onEvent(event: TypingControlUiEvent) {
         when (event) {
             TypingControlUiEvent.OnStart -> {
                 val state = _uiState.value
+                if (state.connectionState != ConnectionState.CONNECTED) return
                 AppContainer.controlTypingUseCase.start(
                     state.selectedScriptContent,
                     state.speed,
