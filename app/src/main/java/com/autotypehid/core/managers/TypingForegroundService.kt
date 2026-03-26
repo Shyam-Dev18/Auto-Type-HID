@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.autotypehid.R
+import com.autotypehid.data.bluetooth.HidKeyMapper
 import com.autotypehid.domain.model.TypingState
 import kotlin.random.Random
 import kotlinx.coroutines.CoroutineScope
@@ -85,6 +86,11 @@ class TypingForegroundService : Service() {
                 }
 
                 maybeInjectTypo(char, typoProbability, speed, wordGapMs, jitterPercent)
+
+                if (HidKeyMapper.mapChar(char) == null) {
+                    TypingServiceStore.setProgress(((index + 1) * 100) / total)
+                    return@forEachIndexed
+                }
 
                 val sent = AppContainer.bluetoothRepository.sendCharacter(char)
                 if (!sent) {

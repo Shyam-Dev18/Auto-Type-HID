@@ -48,7 +48,13 @@ object HidKeyMapper {
         '\n' to HidKeyStroke(0x28),
         '\r' to HidKeyStroke(0x28),
         '\t' to HidKeyStroke(0x2B),
-        '\b' to HidKeyStroke(0x2A)
+        '\b' to HidKeyStroke(0x2A),
+        '\u001B' to HidKeyStroke(0x29),
+        '\u007F' to HidKeyStroke(0x4C),
+        '↑' to HidKeyStroke(0x52),
+        '↓' to HidKeyStroke(0x51),
+        '←' to HidKeyStroke(0x50),
+        '→' to HidKeyStroke(0x4F)
     )
 
     fun mapChar(char: Char): HidKeyStroke? {

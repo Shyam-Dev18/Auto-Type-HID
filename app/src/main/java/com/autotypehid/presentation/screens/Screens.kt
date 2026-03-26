@@ -5,16 +5,19 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -43,12 +46,22 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.core.content.ContextCompat
 import androidx.compose.material.icons.filled.Settings
 import com.autotypehid.domain.model.BluetoothAdapterState
@@ -89,7 +102,8 @@ fun SplashScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
+                .padding(padding)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -135,7 +149,8 @@ fun PermissionsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text("Auto Type HID needs Bluetooth and Location permissions to discover and connect to HID hosts.")
@@ -230,7 +245,8 @@ fun DeviceScanScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -241,8 +257,8 @@ fun DeviceScanScreen(
 
             Text("Connection: ${state.connectionState}")
 
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(state.devices, key = { it.address }) { device ->
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                state.devices.forEach { device ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -310,7 +326,8 @@ fun DashboardScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
@@ -376,8 +393,8 @@ fun DashboardScreen(
             }
 
             Text("Saved Devices")
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(state.savedDevices, key = { it.address }) { device ->
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                state.savedDevices.forEach { device ->
                     val status = when {
                         state.connectionState == ConnectionState.CONNECTED && state.connectedDeviceAddress == device.address -> "Connected"
                         state.pendingDeviceAddress == device.address && state.connectionState == ConnectionState.CONNECTING -> "Connecting"
@@ -478,11 +495,35 @@ fun ScriptEditorScreen(
     state: ScriptEditorUiState,
     onEvent: (ScriptEditorUiEvent) -> Unit
 ) {
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    var hasFocusedField by remember { mutableStateOf(false) }
+
+    BackHandler {
+        if (hasFocusedField) {
+            focusManager.clearFocus(force = true)
+            keyboardController?.hide()
+            hasFocusedField = false
+        } else {
+            onEvent(ScriptEditorUiEvent.OnBack)
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Script Editor") },
-                navigationIcon = { TextButton(onClick = { onEvent(ScriptEditorUiEvent.OnBack) }) { Text("Back") } }
+                navigationIcon = {
+                    TextButton(onClick = {
+                        if (hasFocusedField) {
+                            focusManager.clearFocus(force = true)
+                            keyboardController?.hide()
+                            hasFocusedField = false
+                        } else {
+                            onEvent(ScriptEditorUiEvent.OnBack)
+                        }
+                    }) { Text("Back") }
+                }
             )
         }
     ) { padding ->
@@ -490,14 +531,23 @@ fun ScriptEditorScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             OutlinedTextField(
                 value = state.name,
                 onValueChange = { onEvent(ScriptEditorUiEvent.OnNameChange(it)) },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { hasFocusedField = it.isFocused || it.hasFocus },
                 label = { Text("Name") }
+                ,keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
+                ,keyboardActions = KeyboardActions(onDone = {
+                    focusManager.clearFocus(force = true)
+                    keyboardController?.hide()
+                    hasFocusedField = false
+                })
             )
 
             OutlinedTextField(
@@ -505,8 +555,15 @@ fun ScriptEditorScreen(
                 onValueChange = { onEvent(ScriptEditorUiEvent.OnContentChange(it)) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
+                    .height(260.dp)
+                    .onFocusChanged { hasFocusedField = it.isFocused || it.hasFocus },
                 label = { Text("Content") }
+                ,keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
+                ,keyboardActions = KeyboardActions(onDone = {
+                    focusManager.clearFocus(force = true)
+                    keyboardController?.hide()
+                    hasFocusedField = false
+                })
             )
 
             state.error?.let { Text(it) }
@@ -539,7 +596,8 @@ fun TypingControlScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text("Script: ${state.selectedScriptName}")
