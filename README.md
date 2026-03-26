@@ -115,4 +115,4 @@ Contributions are welcome.
 
 ## License
 
-Add your preferred license file (for example, MIT, Apache-2.0) and update this section accordingly.
+[MIT License](LICENSE)
