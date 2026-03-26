@@ -273,6 +273,34 @@ class BluetoothSessionRepository(
         context.startActivity(intent)
     }
 
+    fun requestEnableBluetooth() {
+        val intent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    }
+
+    fun handleBluetoothIconAction() {
+        when (_bluetoothState.value) {
+            BluetoothAdapterState.OFF,
+            BluetoothAdapterState.TURNING_OFF,
+            BluetoothAdapterState.UNAVAILABLE -> requestEnableBluetooth()
+
+            BluetoothAdapterState.ON,
+            BluetoothAdapterState.TURNING_ON -> openBluetoothSettings()
+        }
+    }
+
+    fun removeSavedDevice(address: String) {
+        knownDevicesStore.removeDevice(address)
+        _savedDevices.value = knownDevicesStore.readKnownDevices()
+        _lastConnectedAddress.value = knownDevicesStore.readLastConnectedAddress()
+
+        if (_connectedDevice.value?.address == address) {
+            disconnect()
+        }
+    }
+
     fun isConnected(): Boolean = _connectionState.value == ConnectionState.CONNECTED
 
     fun isHidDeviceSupported(): Boolean {

@@ -2,6 +2,7 @@ package com.autotypehid.presentation.state
 
 import com.autotypehid.domain.model.BluetoothAdapterState
 import com.autotypehid.domain.model.ConnectionState
+import com.autotypehid.domain.model.ScannedDevice
 import com.autotypehid.domain.model.Script
 import com.autotypehid.domain.model.TypingState
 
@@ -50,9 +51,13 @@ data class DashboardUiState(
     val bluetoothState: BluetoothAdapterState = BluetoothAdapterState.UNAVAILABLE,
     val connectionState: ConnectionState = ConnectionState.DISCONNECTED,
     val connectedDeviceName: String = "No active device",
+    val connectedDeviceAddress: String? = null,
     val selectedScriptName: String = "None",
     val savedDevicesCount: Int = 0,
-    val lastConnectedAddress: String? = null
+    val lastConnectedAddress: String? = null,
+    val savedDevices: List<ScannedDevice> = emptyList(),
+    val pendingDeviceAddress: String? = null,
+    val failedDeviceAddress: String? = null
 )
 
 sealed interface DashboardUiEvent {
@@ -62,6 +67,9 @@ sealed interface DashboardUiEvent {
     data object OnManageDeviceClick : DashboardUiEvent
     data object OnReconnectClick : DashboardUiEvent
     data object OnBluetoothSettingsClick : DashboardUiEvent
+    data class OnSavedDeviceClick(val address: String) : DashboardUiEvent
+    data class OnDeleteSavedDeviceClick(val address: String) : DashboardUiEvent
+    data object OnBluetoothIconClick : DashboardUiEvent
 }
 
 data class ScriptsListUiState(
@@ -112,7 +120,8 @@ data class SettingsUiState(
     val profile: String = "NORMAL",
     val speed: Float = 1.0f,
     val typoProbability: Float = 0.18f,
-    val isSaving: Boolean = false
+    val isSaving: Boolean = false,
+    val showInfoDialog: Boolean = false
 )
 
 sealed interface SettingsUiEvent {
@@ -120,4 +129,6 @@ sealed interface SettingsUiEvent {
     data class OnSpeedChange(val value: Float) : SettingsUiEvent
     data class OnTypoProbabilityChange(val value: Float) : SettingsUiEvent
     data object OnSave : SettingsUiEvent
+    data object OnHelpClick : SettingsUiEvent
+    data object OnDismissHelp : SettingsUiEvent
 }

@@ -12,6 +12,7 @@ import com.autotypehid.domain.usecase.ConnectDeviceUseCase
 import com.autotypehid.domain.usecase.ControlTypingUseCase
 import com.autotypehid.domain.usecase.DeleteScriptUseCase
 import com.autotypehid.domain.usecase.DisconnectDeviceUseCase
+import com.autotypehid.domain.usecase.HandleBluetoothIconActionUseCase
 import com.autotypehid.domain.usecase.LoadScriptUseCase
 import com.autotypehid.domain.usecase.ObserveBluetoothDevicesUseCase
 import com.autotypehid.domain.usecase.ObserveBluetoothStateUseCase
@@ -27,6 +28,7 @@ import com.autotypehid.domain.usecase.ObserveTypingProgressUseCase
 import com.autotypehid.domain.usecase.ObserveTypingStateUseCase
 import com.autotypehid.domain.usecase.OpenBluetoothSettingsUseCase
 import com.autotypehid.domain.usecase.ReconnectLastDeviceUseCase
+import com.autotypehid.domain.usecase.RemoveSavedDeviceUseCase
 import com.autotypehid.domain.usecase.SaveScriptUseCase
 import com.autotypehid.domain.usecase.SelectScriptUseCase
 import com.autotypehid.domain.usecase.StartDeviceScanUseCase
@@ -94,6 +96,8 @@ object AppContainer {
     val disconnectDeviceUseCase by lazy { DisconnectDeviceUseCase(bluetoothSessionRepository) }
     val reconnectLastDeviceUseCase by lazy { ReconnectLastDeviceUseCase(bluetoothSessionRepository) }
     val openBluetoothSettingsUseCase by lazy { OpenBluetoothSettingsUseCase(bluetoothSessionRepository) }
+    val handleBluetoothIconActionUseCase by lazy { HandleBluetoothIconActionUseCase(bluetoothSessionRepository) }
+    val removeSavedDeviceUseCase by lazy { RemoveSavedDeviceUseCase(bluetoothSessionRepository) }
 
     val observeTypingStateUseCase by lazy { ObserveTypingStateUseCase() }
     val observeTypingProgressUseCase by lazy { ObserveTypingProgressUseCase() }

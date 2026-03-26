@@ -102,9 +102,11 @@ fun AutoTypeNavGraph() {
                 onScripts = { vm.onEvent(DashboardUiEvent.OnScriptsClick) },
                 onSettings = { vm.onEvent(DashboardUiEvent.OnSettingsClick) },
                 onTyping = { vm.onEvent(DashboardUiEvent.OnTypingClick) },
-                onManageDevice = { vm.onEvent(DashboardUiEvent.OnManageDeviceClick) },
                 onReconnect = { vm.onEvent(DashboardUiEvent.OnReconnectClick) },
-                onOpenBluetoothSettings = { vm.onEvent(DashboardUiEvent.OnBluetoothSettingsClick) }
+                onAddDevice = { vm.onEvent(DashboardUiEvent.OnManageDeviceClick) },
+                onBluetoothIconClick = { vm.onEvent(DashboardUiEvent.OnBluetoothIconClick) },
+                onSavedDeviceClick = { address -> vm.onEvent(DashboardUiEvent.OnSavedDeviceClick(address)) },
+                onDeleteSavedDeviceClick = { address -> vm.onEvent(DashboardUiEvent.OnDeleteSavedDeviceClick(address)) }
             )
         }
 

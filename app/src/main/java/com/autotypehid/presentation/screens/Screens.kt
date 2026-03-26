@@ -1,43 +1,55 @@
 package com.autotypehid.presentation.screens
 
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import com.autotypehid.domain.model.BluetoothAdapterState
 import com.autotypehid.domain.model.ConnectionState
@@ -99,9 +111,6 @@ fun PermissionsScreen(
     onEvent: (PermissionsUiEvent) -> Unit
 ) {
     val context = LocalContext.current
-    val missingPermissions = remember(state.bluetoothGranted, state.notificationsGranted) {
-        buildMissingPermissions(context)
-    }
 
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -119,10 +128,6 @@ fun PermissionsScreen(
                 notificationsGranted = isNotificationPermissionGranted(context)
             )
         )
-
-        if (missingPermissions.isNotEmpty()) {
-            launcher.launch(missingPermissions.toTypedArray())
-        }
     }
 
     Scaffold(topBar = { TopAppBar(title = { Text("Permissions") }) }) { padding ->
@@ -149,7 +154,7 @@ fun PermissionsScreen(
                     launcher.launch(pendingPermissions.toTypedArray())
                 }
             }) {
-                Text("Request Permissions")
+                Text("Grant Permissions")
             }
 
             Text("Bluetooth: ${if (state.bluetoothGranted) "Granted" else "Missing"}")
@@ -170,6 +175,7 @@ private fun buildMissingPermissions(context: android.content.Context): List<Stri
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         required.add(Manifest.permission.BLUETOOTH_CONNECT)
         required.add(Manifest.permission.BLUETOOTH_SCAN)
+        required.add(Manifest.permission.BLUETOOTH_ADVERTISE)
     }
 
     required.add(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -187,6 +193,7 @@ private fun isBluetoothPermissionGranted(context: android.content.Context): Bool
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == android.content.pm.PackageManager.PERMISSION_GRANTED &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == android.content.pm.PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_ADVERTISE) == android.content.pm.PackageManager.PERMISSION_GRANTED &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
     } else {
         ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -259,15 +266,39 @@ fun DashboardScreen(
     onScripts: () -> Unit,
     onSettings: () -> Unit,
     onTyping: () -> Unit,
-    onManageDevice: () -> Unit,
     onReconnect: () -> Unit,
-    onOpenBluetoothSettings: () -> Unit
+    onAddDevice: () -> Unit,
+    onBluetoothIconClick: () -> Unit,
+    onSavedDeviceClick: (String) -> Unit,
+    onDeleteSavedDeviceClick: (String) -> Unit
 ) {
+    val statusAlpha = animateFloatAsState(
+        targetValue = if (state.connectionState == ConnectionState.CONNECTED) 1f else 0.85f,
+        animationSpec = tween(durationMillis = 350),
+        label = "homeStatusAlpha"
+    )
+
     Scaffold(
+        floatingActionButton = {
+            FloatingActionButton(onClick = onAddDevice) {
+                Icon(Icons.Default.Add, contentDescription = "Add device")
+            }
+        },
         topBar = {
             TopAppBar(
                 title = { Text("Home") },
                 actions = {
+                    IconButton(onClick = onBluetoothIconClick) {
+                        val iconRes = if (state.bluetoothState == BluetoothAdapterState.ON) {
+                            android.R.drawable.stat_sys_data_bluetooth
+                        } else {
+                            android.R.drawable.stat_notify_error
+                        }
+                        Icon(
+                            painter = painterResource(id = iconRes),
+                            contentDescription = "Bluetooth"
+                        )
+                    }
                     IconButton(onClick = onSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
@@ -282,14 +313,57 @@ fun DashboardScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(onClick = onReconnect, enabled = state.lastConnectedAddress != null) {
+                    Text("Reconnect")
+                }
+            }
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .alpha(statusAlpha.value),
+                shape = CardDefaults.shape
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
                     Text("Bluetooth: ${state.bluetoothState}")
                     Text("Connection: ${state.connectionState}")
                     Text("Device: ${state.connectedDeviceName}")
-                    Text("Saved devices: ${state.savedDevicesCount}")
                     Text("Last device: ${state.lastConnectedAddress ?: "None"}")
                     Text("Selected script: ${state.selectedScriptName}")
+                }
+            }
+
+            Text(
+                text = if (state.connectionState == ConnectionState.CONNECTED) {
+                    "Connected and ready to type"
+                } else {
+                    "Disconnected. Select a saved device or add a new one."
+                }
+            )
+
+            Text("Use Scripts to choose content, then Start Typing to begin.")
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Button(
+                    modifier = Modifier.weight(1f),
+                    onClick = onScripts
+                ) {
+                    Text("Scripts")
+                }
+
+                Button(
+                    modifier = Modifier.weight(1f),
+                    onClick = onTyping,
+                    enabled = state.connectionState == ConnectionState.CONNECTED
+                ) {
+                    Text("Start Typing")
                 }
             }
 
@@ -301,15 +375,40 @@ fun DashboardScreen(
                 Text("Disconnected. Reconnect to resume typing.")
             }
 
-            Button(onClick = onTyping, enabled = state.connectionState == ConnectionState.CONNECTED) {
-                Text("Start Typing")
+            Text("Saved Devices")
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(state.savedDevices, key = { it.address }) { device ->
+                    val status = when {
+                        state.connectionState == ConnectionState.CONNECTED && state.connectedDeviceAddress == device.address -> "Connected"
+                        state.pendingDeviceAddress == device.address && state.connectionState == ConnectionState.CONNECTING -> "Connecting"
+                        state.failedDeviceAddress == device.address -> "Failed"
+                        else -> "Idle"
+                    }
+
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSavedDeviceClick(device.address) },
+                        shape = CardDefaults.shape
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(device.name)
+                                Text(status)
+                            }
+                            FilledTonalIconButton(onClick = { onDeleteSavedDeviceClick(device.address) }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Delete saved device")
+                            }
+                        }
+                    }
+                }
             }
-            Button(onClick = onManageDevice) { Text("Manage Device") }
-            Button(onClick = onReconnect, enabled = state.lastConnectedAddress != null) {
-                Text("Reconnect Last Device")
-            }
-            Button(onClick = onOpenBluetoothSettings) { Text("Bluetooth Settings") }
-            Button(onClick = onScripts) { Text("Scripts") }
         }
     }
 }
@@ -478,11 +577,34 @@ fun SettingsScreen(
     onEvent: (SettingsUiEvent) -> Unit,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
+
+    if (state.showInfoDialog) {
+        AlertDialog(
+            onDismissRequest = { onEvent(SettingsUiEvent.OnDismissHelp) },
+            title = { Text("AutoTypeHID") },
+            text = { Text("Bluetooth HID typing app. Contact support: dev@autotypehid.app") },
+            confirmButton = {
+                TextButton(onClick = { onEvent(SettingsUiEvent.OnDismissHelp) }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Settings") },
-                navigationIcon = { TextButton(onClick = onBack) { Text("Back") } }
+                navigationIcon = { TextButton(onClick = onBack) { Text("Back") } },
+                actions = {
+                    IconButton(onClick = { onEvent(SettingsUiEvent.OnHelpClick) }) {
+                        Icon(
+                            painter = painterResource(id = android.R.drawable.ic_menu_help),
+                            contentDescription = "Help"
+                        )
+                    }
+                }
             )
         }
     ) { padding ->
@@ -525,6 +647,23 @@ fun SettingsScreen(
                     Text("About")
                     Text("AutoTypeHID")
                     Text("Bluetooth HID typing with script-based automation.")
+                    Text("Version: 1.0.0")
+                }
+            }
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Developer")
+                    Text("Name: AutoType Team")
+                    TextButton(onClick = {
+                        val intent = Intent(Intent.ACTION_SENDTO).apply {
+                            data = Uri.parse("mailto:dev@autotypehid.app")
+                            putExtra(Intent.EXTRA_SUBJECT, "AutoTypeHID Support")
+                        }
+                        context.startActivity(intent)
+                    }) {
+                        Text("dev@autotypehid.app")
+                    }
                 }
             }
         }

@@ -66,7 +66,7 @@ class PermissionsViewModel : ViewModel() {
     fun onEvent(event: PermissionsUiEvent) {
         when (event) {
             is PermissionsUiEvent.OnPermissionResult -> {
-                val canContinue = event.bluetoothGranted && event.notificationsGranted
+                val canContinue = event.bluetoothGranted
                 _uiState.update {
                     it.copy(
                         bluetoothGranted = event.bluetoothGranted,
@@ -139,19 +139,30 @@ class DashboardViewModel : ViewModel() {
         }
         viewModelScope.launch {
             AppContainer.observeConnectionStateUseCase().collect { state ->
-                _uiState.update { it.copy(connectionState = state) }
+                _uiState.update {
+                    val failedAddress = if (state == ConnectionState.ERROR) it.pendingDeviceAddress else null
+                    val pendingAddress = if (state == ConnectionState.CONNECTED || state == ConnectionState.ERROR) null else it.pendingDeviceAddress
+                    it.copy(
+                        connectionState = state,
+                        failedDeviceAddress = failedAddress,
+                        pendingDeviceAddress = pendingAddress
+                    )
+                }
             }
         }
         viewModelScope.launch {
             AppContainer.observeConnectedDeviceUseCase().collect { device ->
                 _uiState.update {
-                    it.copy(connectedDeviceName = device?.name ?: "No active device")
+                    it.copy(
+                        connectedDeviceName = device?.name ?: "No active device",
+                        connectedDeviceAddress = device?.address
+                    )
                 }
             }
         }
         viewModelScope.launch {
             AppContainer.observeSavedDevicesUseCase().collect { devices ->
-                _uiState.update { it.copy(savedDevicesCount = devices.size) }
+                _uiState.update { it.copy(savedDevicesCount = devices.size, savedDevices = devices) }
             }
         }
         viewModelScope.launch {
@@ -175,6 +186,14 @@ class DashboardViewModel : ViewModel() {
                 DashboardUiEvent.OnManageDeviceClick -> _navigation.emit(Routes.DEVICE_SCAN)
                 DashboardUiEvent.OnReconnectClick -> AppContainer.reconnectLastDeviceUseCase()
                 DashboardUiEvent.OnBluetoothSettingsClick -> AppContainer.openBluetoothSettingsUseCase()
+                is DashboardUiEvent.OnSavedDeviceClick -> {
+                    _uiState.update { it.copy(pendingDeviceAddress = event.address, failedDeviceAddress = null) }
+                    AppContainer.connectDeviceUseCase(event.address)
+                }
+                is DashboardUiEvent.OnDeleteSavedDeviceClick -> {
+                    AppContainer.removeSavedDeviceUseCase(event.address)
+                }
+                DashboardUiEvent.OnBluetoothIconClick -> AppContainer.handleBluetoothIconActionUseCase()
             }
         }
     }
@@ -366,7 +385,13 @@ class SettingsViewModel : ViewModel() {
     fun onEvent(event: SettingsUiEvent) {
         when (event) {
             is SettingsUiEvent.OnProfileChange -> _uiState.update { it.copy(profile = event.value) }
-            is SettingsUiEvent.OnSpeedChange -> _uiState.update { it.copy(speed = event.value) }
+            is SettingsUiEvent.OnSpeedChange -> {
+                _uiState.update { it.copy(speed = event.value) }
+                viewModelScope.launch {
+                    val state = _uiState.value
+                    AppContainer.updateSettingsUseCase(state.profile, state.speed, state.typoProbability)
+                }
+            }
             is SettingsUiEvent.OnTypoProbabilityChange -> _uiState.update { it.copy(typoProbability = event.value) }
             SettingsUiEvent.OnSave -> {
                 val state = _uiState.value
@@ -376,6 +401,8 @@ class SettingsViewModel : ViewModel() {
                     _uiState.update { it.copy(isSaving = false) }
                 }
             }
+            SettingsUiEvent.OnHelpClick -> _uiState.update { it.copy(showInfoDialog = true) }
+            SettingsUiEvent.OnDismissHelp -> _uiState.update { it.copy(showInfoDialog = false) }
         }
     }
 }

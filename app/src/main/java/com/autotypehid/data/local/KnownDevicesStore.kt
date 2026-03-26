@@ -39,6 +39,19 @@ class KnownDevicesStore(context: Context) {
             .apply()
     }
 
+    fun removeDevice(address: String) {
+        val existing = readKnownDevices()
+            .filterNot { it.address == address }
+            .sortedBy { it.name.lowercase() }
+        val encoded = existing.joinToString("\n") { known -> "${known.name}\t${known.address}" }
+
+        val editor = prefs.edit().putString(KEY_KNOWN_DEVICES, encoded)
+        if (readLastConnectedAddress() == address) {
+            editor.remove(KEY_LAST_CONNECTED_ADDRESS)
+        }
+        editor.apply()
+    }
+
     companion object {
         private const val PREFS_NAME = "known_devices"
         private const val KEY_KNOWN_DEVICES = "known_devices"
