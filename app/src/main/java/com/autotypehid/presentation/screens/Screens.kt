@@ -7,8 +7,6 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
@@ -50,9 +48,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -64,6 +62,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.core.content.ContextCompat
 import androidx.compose.material.icons.filled.Settings
+import kotlinx.coroutines.launch
 import com.autotypehid.domain.model.BluetoothAdapterState
 import com.autotypehid.domain.model.ConnectionState
 import com.autotypehid.domain.model.Script
@@ -98,12 +97,11 @@ fun SplashScreen(
         )
     }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Splash") }) }) { padding ->
+    Scaffold { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState()),
+                .padding(padding),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -288,11 +286,15 @@ fun DashboardScreen(
     onSavedDeviceClick: (String) -> Unit,
     onDeleteSavedDeviceClick: (String) -> Unit
 ) {
-    val statusAlpha = animateFloatAsState(
-        targetValue = if (state.connectionState == ConnectionState.CONNECTED) 1f else 0.85f,
-        animationSpec = tween(durationMillis = 350),
-        label = "homeStatusAlpha"
-    )
+    val sortedDevices = remember(
+        state.savedDevices,
+        state.connectedDeviceAddress
+    ) {
+        state.savedDevices.sortedWith(
+            compareByDescending<com.autotypehid.domain.model.ScannedDevice> { it.address == state.connectedDeviceAddress }
+                .thenBy { it.name.lowercase() }
+        )
+    }
 
     Scaffold(
         floatingActionButton = {
@@ -322,110 +324,126 @@ fun DashboardScreen(
             )
         }
     ) { padding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
+                .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                TextButton(onClick = onReconnect, enabled = state.lastConnectedAddress != null) {
-                    Text("Reconnect")
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onReconnect, enabled = state.lastConnectedAddress != null) {
+                        Text("Reconnect")
+                    }
                 }
             }
 
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .alpha(statusAlpha.value),
-                shape = CardDefaults.shape
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Text("Bluetooth: ${state.bluetoothState}")
-                    Text("Connection: ${state.connectionState}")
-                    Text("Device: ${state.connectedDeviceName}")
-                    Text("Last device: ${state.lastConnectedAddress ?: "None"}")
-                    Text("Selected script: ${state.selectedScriptName}")
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = CardDefaults.shape
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text("Bluetooth: ${state.bluetoothState}")
+                        Text("Connection: ${state.connectionState}")
+                        Text("Device: ${state.connectedDeviceName}")
+                        Text("Last device: ${state.lastConnectedAddress ?: "None"}")
+                        Text("Selected script: ${state.selectedScriptName}")
+                    }
                 }
             }
 
-            Text(
-                text = if (state.connectionState == ConnectionState.CONNECTED) {
-                    "Connected and ready to type"
-                } else {
-                    "Disconnected. Select a saved device or add a new one."
-                }
-            )
+            item {
+                Text(
+                    text = if (state.connectionState == ConnectionState.CONNECTED) {
+                        "Connected and ready to type"
+                    } else {
+                        "Disconnected. Select a saved device or add a new one."
+                    }
+                )
+            }
 
-            Text("Use Scripts to choose content, then Start Typing to begin.")
+            item {
+                Text("Use Scripts to choose content, then Start Typing to begin.")
+            }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Button(
-                    modifier = Modifier.weight(1f),
-                    onClick = onScripts
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Scripts")
-                }
+                    Button(
+                        modifier = Modifier.weight(1f),
+                        onClick = onScripts
+                    ) {
+                        Text("Scripts")
+                    }
 
-                Button(
-                    modifier = Modifier.weight(1f),
-                    onClick = onTyping,
-                    enabled = state.connectionState == ConnectionState.CONNECTED
-                ) {
-                    Text("Start Typing")
+                    Button(
+                        modifier = Modifier.weight(1f),
+                        onClick = onTyping,
+                        enabled = state.connectionState == ConnectionState.CONNECTED
+                    ) {
+                        Text("Start Typing")
+                    }
                 }
             }
 
             if (state.bluetoothState != BluetoothAdapterState.ON) {
-                Text("Bluetooth is OFF or unavailable. Turn it ON to reconnect.")
+                item {
+                    Text("Bluetooth is OFF or unavailable. Turn it ON to reconnect.")
+                }
             }
 
             if (state.connectionState != ConnectionState.CONNECTED) {
-                Text("Disconnected. Reconnect to resume typing.")
+                item {
+                    Text("Disconnected. Reconnect to resume typing.")
+                }
             }
 
-            Text("Saved Devices")
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                state.savedDevices.forEach { device ->
-                    val status = when {
-                        state.connectionState == ConnectionState.CONNECTED && state.connectedDeviceAddress == device.address -> "Connected"
-                        state.pendingDeviceAddress == device.address && state.connectionState == ConnectionState.CONNECTING -> "Connecting"
-                        state.failedDeviceAddress == device.address -> "Failed"
-                        else -> "Idle"
-                    }
+            item {
+                Text("Saved Devices")
+            }
 
-                    Card(
+            items(sortedDevices, key = { it.address }) { device ->
+                val status = when {
+                    state.connectionState == ConnectionState.CONNECTED && state.connectedDeviceAddress == device.address -> "Connected"
+                    state.pendingDeviceAddress == device.address && state.connectionState == ConnectionState.CONNECTING -> "Connecting"
+                    state.failedDeviceAddress == device.address -> "Failed"
+                    else -> "Idle"
+                }
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSavedDeviceClick(device.address) },
+                    shape = CardDefaults.shape
+                ) {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onSavedDeviceClick(device.address) },
-                        shape = CardDefaults.shape
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column {
-                                Text(device.name)
-                                Text(status)
-                            }
-                            FilledTonalIconButton(onClick = { onDeleteSavedDeviceClick(device.address) }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete saved device")
-                            }
+                        Column {
+                            Text(device.name)
+                            Text(status)
+                        }
+                        FilledTonalIconButton(onClick = { onDeleteSavedDeviceClick(device.address) }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete saved device")
                         }
                     }
                 }
             }
+
+            item { Spacer(modifier = Modifier.height(72.dp)) }
         }
     }
 }
@@ -497,6 +515,7 @@ fun ScriptEditorScreen(
 ) {
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val scope = rememberCoroutineScope()
     var hasFocusedField by remember { mutableStateOf(false) }
 
     BackHandler {
@@ -505,7 +524,9 @@ fun ScriptEditorScreen(
             keyboardController?.hide()
             hasFocusedField = false
         } else {
-            onEvent(ScriptEditorUiEvent.OnBack)
+            scope.launch {
+                onEvent(ScriptEditorUiEvent.OnBack)
+            }
         }
     }
 
@@ -520,7 +541,9 @@ fun ScriptEditorScreen(
                             keyboardController?.hide()
                             hasFocusedField = false
                         } else {
-                            onEvent(ScriptEditorUiEvent.OnBack)
+                            scope.launch {
+                                onEvent(ScriptEditorUiEvent.OnBack)
+                            }
                         }
                     }) { Text("Back") }
                 }
@@ -541,13 +564,9 @@ fun ScriptEditorScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .onFocusChanged { hasFocusedField = it.isFocused || it.hasFocus },
-                label = { Text("Name") }
-                ,keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
-                ,keyboardActions = KeyboardActions(onDone = {
-                    focusManager.clearFocus(force = true)
-                    keyboardController?.hide()
-                    hasFocusedField = false
-                })
+                label = { Text("Name") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default)
             )
 
             OutlinedTextField(
@@ -557,13 +576,11 @@ fun ScriptEditorScreen(
                     .fillMaxWidth()
                     .height(260.dp)
                     .onFocusChanged { hasFocusedField = it.isFocused || it.hasFocus },
-                label = { Text("Content") }
-                ,keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
-                ,keyboardActions = KeyboardActions(onDone = {
-                    focusManager.clearFocus(force = true)
-                    keyboardController?.hide()
-                    hasFocusedField = false
-                })
+                label = { Text("Content") },
+                singleLine = false,
+                maxLines = Int.MAX_VALUE,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
+                keyboardActions = KeyboardActions()
             )
 
             state.error?.let { Text(it) }
@@ -641,7 +658,7 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { onEvent(SettingsUiEvent.OnDismissHelp) },
             title = { Text("Auto Type HID") },
-            text = { Text("Bluetooth HID typing app. Contact support: dev@autotypehid.app") },
+            text = { Text("Bluetooth HID typing app. Contact support: darshanamshyam17@gmail.com") },
             confirmButton = {
                 TextButton(onClick = { onEvent(SettingsUiEvent.OnDismissHelp) }) {
                     Text("OK")
@@ -666,92 +683,126 @@ fun SettingsScreen(
             )
         }
     ) { padding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
+                .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Typing Behavior")
-            Text("Typing Speed: ${"%.2f".format(state.speed)}")
-            Slider(
-                value = state.speed,
-                valueRange = 0.5f..2.0f,
-                onValueChange = { onEvent(SettingsUiEvent.OnSpeedChange(it)) }
-            )
+            item { Spacer(modifier = Modifier.height(12.dp)) }
 
-            Text("Typo Probability: ${"%.2f".format(state.typoProbability)}")
-            Slider(
-                value = state.typoProbability,
-                valueRange = 0f..0.35f,
-                onValueChange = { onEvent(SettingsUiEvent.OnTypoProbabilityChange(it)) }
-            )
+            item { Text("Typing Behavior") }
+            item { Text("Typing Speed: ${"%.2f".format(state.speed)}") }
+            item {
+                Slider(
+                    value = state.speed,
+                    valueRange = 0.5f..2.0f,
+                    onValueChange = { onEvent(SettingsUiEvent.OnSpeedChange(it)) }
+                )
+            }
 
-            Text("Word Gap Delay: ${state.wordGapMs} ms")
-            Slider(
-                value = state.wordGapMs.toFloat(),
-                valueRange = 0f..300f,
-                onValueChange = { onEvent(SettingsUiEvent.OnWordGapChange(it)) }
-            )
+            item { Text("Typo Probability: ${"%.2f".format(state.typoProbability)}") }
+            item {
+                Slider(
+                    value = state.typoProbability,
+                    valueRange = 0f..0.35f,
+                    onValueChange = { onEvent(SettingsUiEvent.OnTypoProbabilityChange(it)) }
+                )
+            }
 
-            Text("Jitter Randomization: ${state.jitterPercent}%")
-            Slider(
-                value = state.jitterPercent.toFloat(),
-                valueRange = 0f..80f,
-                onValueChange = { onEvent(SettingsUiEvent.OnJitterChange(it)) }
-            )
+            item { Text("Word Gap Delay: ${state.wordGapMs} ms") }
+            item {
+                Slider(
+                    value = state.wordGapMs.toFloat(),
+                    valueRange = 0f..300f,
+                    onValueChange = { onEvent(SettingsUiEvent.OnWordGapChange(it)) }
+                )
+            }
 
-            Text("Profiles")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("NORMAL", "FAST", "SLOW").forEach { profile ->
-                    TextButton(onClick = { onEvent(SettingsUiEvent.OnProfileChange(profile)) }) {
-                        Text(if (state.profile == profile) "$profile *" else profile)
+            item { Text("Jitter Randomization: ${state.jitterPercent}%") }
+            item {
+                Slider(
+                    value = state.jitterPercent.toFloat(),
+                    valueRange = 0f..80f,
+                    onValueChange = { onEvent(SettingsUiEvent.OnJitterChange(it)) }
+                )
+            }
+
+            item { Text("Profiles") }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("NORMAL", "FAST", "SLOW").forEach { profile ->
+                        TextButton(onClick = { onEvent(SettingsUiEvent.OnProfileChange(profile)) }) {
+                            Text(if (state.profile == profile) "$profile *" else profile)
+                        }
                     }
                 }
             }
 
             if (state.profile == "CUSTOM") {
-                Text("Current profile: CUSTOM")
+                item { Text("Current profile: CUSTOM") }
             }
 
-            Text("Appearance")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("SYSTEM", "LIGHT", "DARK").forEach { mode ->
-                    TextButton(onClick = { onEvent(SettingsUiEvent.OnThemeModeChange(mode)) }) {
-                        Text(if (state.themeMode == mode) "$mode *" else mode)
-                    }
-                }
-            }
-
-            Button(onClick = { onEvent(SettingsUiEvent.OnSave) }, enabled = !state.isSaving) {
-                Text(if (state.isSaving) "Saving..." else "Save")
-            }
-
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text("App Info")
-                    Text("Auto Type HID")
-                    Text("Bluetooth HID typing with script-based automation.")
-                    Text("Version: 1.1.0")
-                }
-            }
-
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Developer")
-                    Text("Name: AutoType Team")
-                    TextButton(onClick = {
-                        val intent = Intent(Intent.ACTION_SENDTO).apply {
-                            data = Uri.parse("mailto:dev@autotypehid.app")
-                            putExtra(Intent.EXTRA_SUBJECT, "Auto Type HID Support")
+            item { Text("Appearance") }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("SYSTEM", "LIGHT", "DARK").forEach { mode ->
+                        TextButton(onClick = { onEvent(SettingsUiEvent.OnThemeModeChange(mode)) }) {
+                            Text(if (state.themeMode == mode) "$mode *" else mode)
                         }
-                        context.startActivity(intent)
-                    }) {
-                        Text("dev@autotypehid.app")
                     }
                 }
             }
+
+            item {
+                Button(onClick = { onEvent(SettingsUiEvent.OnSave) }, enabled = !state.isSaving) {
+                    Text(if (state.isSaving) "Saving..." else "Save")
+                }
+            }
+
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text("About AutoTypeHID")
+                        Text(
+                            "Auto Type HID is an open-source Android app that turns your phone into a Bluetooth HID keyboard, allowing you to automate typing on any device like laptops, PCs, smartphones, and tablets. " +
+                                "Create and manage scripts, then execute them with human-like typing behavior, including natural delays and realistic input patterns, making automation smoother and less detectable. " +
+                                "Ideal for repetitive typing tasks, testing, configurations, and presentations. " +
+                                "Being an open-source project, you are welcome to contribute to its development on GitHub."
+                        )
+                        Text("Version: 1.1.0")
+                        TextButton(onClick = {
+                            val intent = Intent(Intent.ACTION_VIEW).apply {
+                                data = Uri.parse("https://github.com/Shyam-Dev18/Auto-Type-HID")
+                            }
+                            context.startActivity(intent)
+                        }) {
+                            Text("Contribute on GitHub")
+                        }
+                    }
+                }
+            }
+
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("Developer")
+                        Text("Name: Shyam Darshanam")
+                        TextButton(onClick = {
+                            val intent = Intent(Intent.ACTION_SENDTO).apply {
+                                data = Uri.parse("mailto:darshanshyam17@gmail.com")
+                                putExtra(Intent.EXTRA_SUBJECT, "Auto Type HID Support")
+                            }
+                            context.startActivity(intent)
+                        }) {
+                            Text("darshanshyam17@gmail.com")
+                        }
+                    }
+                }
+            }
+
+            item { Spacer(modifier = Modifier.height(24.dp)) }
         }
     }
 }

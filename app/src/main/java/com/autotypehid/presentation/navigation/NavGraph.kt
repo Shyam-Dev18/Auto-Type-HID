@@ -46,6 +46,7 @@ fun AutoTypeNavGraph() {
             LaunchedEffect(vm) {
                 vm.navigation.collect { route ->
                     navController.navigate(route) {
+                        launchSingleTop = true
                         popUpTo(Routes.INIT) { inclusive = true }
                     }
                 }
@@ -64,6 +65,7 @@ fun AutoTypeNavGraph() {
             LaunchedEffect(vm) {
                 vm.navigation.collect { route ->
                     navController.navigate(route) {
+                        launchSingleTop = true
                         popUpTo(Routes.PERMISSIONS) { inclusive = true }
                     }
                 }
@@ -94,7 +96,11 @@ fun AutoTypeNavGraph() {
             val uiState = vm.uiState.collectAsStateWithLifecycle().value
 
             LaunchedEffect(vm) {
-                vm.navigation.collect { route -> navController.navigate(route) }
+                vm.navigation.collect { route ->
+                    navController.navigate(route) {
+                        launchSingleTop = true
+                    }
+                }
             }
 
             DashboardScreen(
@@ -116,7 +122,9 @@ fun AutoTypeNavGraph() {
 
             LaunchedEffect(vm) {
                 vm.navigation.collect { route ->
-                    navController.navigate(route)
+                    navController.navigate(route) {
+                        launchSingleTop = true
+                    }
                 }
             }
 
@@ -145,6 +153,7 @@ fun AutoTypeNavGraph() {
             LaunchedEffect(vm) {
                 vm.navigation.collect { route ->
                     navController.navigate(route) {
+                        launchSingleTop = true
                         popUpTo(Routes.SCRIPT_EDITOR) { inclusive = true }
                     }
                 }
