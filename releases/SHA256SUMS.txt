@@ -1,2 +1,2 @@
-d384c5a85e92d3cd02419633d0cc41ec6372a4bf55390eba1c3250079c7ca13e  releases/AutoTypeHID-v1.1.0-release.apk
-b5961d56bdea994a29906b10e62d78d829200ea4c945031905073c0b8c5152d0  releases/AutoTypeHID-v1.1.0-release.aab
+560bfbfff2c68ff9c20dd33185c130ef9d9684c485bd0fca1c8a85dcda2d92ce  releases/AutoTypeHID-v1.1.0-release.apk
+4cd0987a5ea15b44e8699a5109e916ebc36aa013221529c11347c476e6a88e3a  releases/AutoTypeHID-v1.1.0-release.aab

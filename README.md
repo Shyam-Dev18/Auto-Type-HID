@@ -2,6 +2,8 @@
 
 ## Download
 
+Latest public package: `v1.1.0` (re-release)
+
 - APK (install on Android): [AutoTypeHID-v1.1.0-release.apk](https://github.com/Shyam-Dev18/Auto-Type-HID/raw/main/releases/AutoTypeHID-v1.1.0-release.apk)
 - AAB (store upload): [AutoTypeHID-v1.1.0-release.aab](https://github.com/Shyam-Dev18/Auto-Type-HID/raw/main/releases/AutoTypeHID-v1.1.0-release.aab)
 - Checksums: [SHA256SUMS.txt](https://github.com/Shyam-Dev18/Auto-Type-HID/blob/main/releases/SHA256SUMS.txt)
