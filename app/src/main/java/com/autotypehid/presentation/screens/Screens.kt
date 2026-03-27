@@ -1,6 +1,7 @@
 package com.autotypehid.presentation.screens
 
 import android.Manifest
+import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -46,12 +47,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -297,6 +302,26 @@ fun DashboardScreen(
     onSavedDeviceClick: (String) -> Unit,
     onDeleteSavedDeviceClick: (String) -> Unit
 ) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var bluetoothIconEnabled by remember {
+        mutableStateOf(BluetoothAdapter.getDefaultAdapter()?.isEnabled == true)
+    }
+
+    LaunchedEffect(state.bluetoothState) {
+        bluetoothIconEnabled = state.bluetoothState == BluetoothAdapterState.ON ||
+            (BluetoothAdapter.getDefaultAdapter()?.isEnabled == true)
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                bluetoothIconEnabled = BluetoothAdapter.getDefaultAdapter()?.isEnabled == true
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     val sortedDevices = remember(
         state.savedDevices,
         state.connectedDeviceAddress
@@ -318,7 +343,7 @@ fun DashboardScreen(
                 title = { Text("Home") },
                 actions = {
                     IconButton(onClick = onBluetoothIconClick) {
-                        val iconRes = if (state.bluetoothState == BluetoothAdapterState.ON) {
+                        val iconRes = if (bluetoothIconEnabled) {
                             android.R.drawable.stat_sys_data_bluetooth
                         } else {
                             android.R.drawable.stat_notify_error

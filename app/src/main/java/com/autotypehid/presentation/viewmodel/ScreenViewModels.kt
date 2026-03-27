@@ -226,7 +226,10 @@ class ScriptsListViewModel : ViewModel() {
                 viewModelScope.launch { _navigation.emit(Routes.scriptEditor(event.scriptId)) }
             }
             is ScriptsListUiEvent.OnSelect -> {
-                AppContainer.selectScriptUseCase(event.script)
+                viewModelScope.launch {
+                    AppContainer.selectScriptUseCase(event.script)
+                    _navigation.emit(Routes.DASHBOARD)
+                }
             }
         }
     }
