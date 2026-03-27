@@ -807,7 +807,7 @@ fun SettingsScreen(
                                 "Ideal for repetitive typing tasks, testing, configurations, and presentations. " +
                                 "Being an open-source project, you are welcome to contribute to its development on GitHub."
                         )
-                        Text("Version: 1.1.0")
+                        Text("Version: 1.1.1")
                         TextButton(onClick = {
                             val intent = Intent(Intent.ACTION_VIEW).apply {
                                 data = Uri.parse("https://github.com/Shyam-Dev18/Auto-Type-HID")

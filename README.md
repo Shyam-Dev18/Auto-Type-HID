@@ -2,10 +2,10 @@
 
 ## Download
 
-Latest public package: `v1.1.0` (re-release)
+Latest public package: `v1.1.1`
 
-- APK (install on Android): [AutoTypeHID-v1.1.0-release.apk](https://github.com/Shyam-Dev18/Auto-Type-HID/raw/main/releases/AutoTypeHID-v1.1.0-release.apk)
-- AAB (store upload): [AutoTypeHID-v1.1.0-release.aab](https://github.com/Shyam-Dev18/Auto-Type-HID/raw/main/releases/AutoTypeHID-v1.1.0-release.aab)
+- APK (install on Android): [AutoTypeHID-v1.1.1-release.apk](https://github.com/Shyam-Dev18/Auto-Type-HID/raw/main/releases/AutoTypeHID-v1.1.1-release.apk)
+- AAB (store upload): [AutoTypeHID-v1.1.1-release.aab](https://github.com/Shyam-Dev18/Auto-Type-HID/raw/main/releases/AutoTypeHID-v1.1.1-release.aab)
 - Checksums: [SHA256SUMS.txt](https://github.com/Shyam-Dev18/Auto-Type-HID/blob/main/releases/SHA256SUMS.txt)
 
 AutoTypeHID is an Android app that turns a phone into a Bluetooth HID keyboard and automates typing scripts on paired host devices.
@@ -103,6 +103,8 @@ AutoTypeHID may request these depending on Android version and flow:
 
 ## Release Notes
 
+- Improved Bluetooth icon refresh behavior in dashboard after state changes
+- Script selection now redirects directly back to Home with active selection
 - Optimized launcher icon assets and adaptive icon configuration
 - Improved startup and dashboard UX flows
 - Saved-device reconnect and settings persistence enhancements
